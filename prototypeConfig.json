@@ -1,0 +1,83 @@
+{
+    "classifierModel": "models/aptos_dr_classifier.onnx",
+    "lesionModels": {
+        "microaneurysm": "models/microaneurysm_model.onnx",
+        "hemorrhage": "models/hemorrhage_model.onnx",
+        "exudate": "models/exudate_model.onnx"
+    },
+    "classifier": {
+        "inputSize": [
+            224,
+            224
+        ],
+        "mean": [
+            0.485,
+            0.456,
+            0.406
+        ],
+        "std": [
+            0.229,
+            0.224,
+            0.225
+        ],
+        "classes": [
+            "No DR",
+            "Mild",
+            "Moderate",
+            "Severe",
+            "Proliferative DR"
+        ],
+        "referableGrades": [
+            2,
+            3,
+            4
+        ],
+        "referableThreshold": 0.4,
+        "temperature": 1.0
+    },
+    "lesion": {
+        "inputSize": [
+            256,
+            256
+        ],
+        "threshold": 0.5,
+        "minComponentPixels": 3
+    },
+    "quality": {
+        "sharpnessGood": 0.0001,
+        "sharpnessBorderline": 6e-05,
+        "brightnessMin": 0.1,
+        "brightnessMax": 0.9,
+        "contrastGood": 0.07,
+        "contrastBorderline": 0.05,
+        "illuminationMax": 0.2,
+        "fovMinFraction": 0.35,
+        "fovMaxFraction": 0.98,
+        "clippedDarkMax": 0.35,
+        "clippedBrightMax": 0.35,
+        "borderlineScore": 0.55,
+        "acceptScore": 0.75
+    },
+    "report": {
+        "reviewTargetSeconds": 30
+    },
+    "simulation": {
+        "annualPatients": 100000,
+        "operatingDays": 300,
+        "hoursPerDay": 8,
+        "captureMinPerPatient": 4,
+        "processingSecPerImage": 2.0,
+        "reviewSecPerReferable": 25,
+        "referralRate": 0.18,
+        "imageSizeMB": 3.0,
+        "uplinkMbps": 10,
+        "reviewers": 2,
+        "processors": 2,
+        "captureStations": 2
+    },
+    "fusion": {
+        "enabled": false,
+        "modelFile": "models/fusion_model.mat",
+        "threshold": 0.5
+    }
+}
