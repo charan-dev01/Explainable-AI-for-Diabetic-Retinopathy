@@ -1,7 +1,7 @@
 # Explainable AI for Diabetic Retinopathy Screening
 
 An explainable deep-learning based system for **Diabetic Retinopathy (DR) screening from retinal fundus photographs**, designed with a focus on transparency, clinical interpretability, and telemedicine deployment.
-
+DEMO: https://youtu.be/-zfdNnzEZ3Q
 The system classifies retinal fundus images into **five stages of Diabetic Retinopathy** and provides visual explanations using **Grad-CAM**, while separate lesion-segmentation models provide additional evidence for retinal abnormalities such as microaneurysms, hemorrhages, and exudates.
 
 The project is designed as a prototype for scalable DR screening, particularly for **rural and resource-constrained healthcare environments**.
