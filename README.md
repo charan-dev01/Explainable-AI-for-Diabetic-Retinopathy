@@ -1,147 +1,165 @@
-# Explainable AI for Diabetic Retinopathy Screening
+# LUMORA VISION
+### Explainable AI–Assisted Diabetic Retinopathy Screening
 
-An explainable deep-learning based system for **Diabetic Retinopathy (DR) screening from retinal fundus photographs**, designed with a focus on transparency, clinical interpretability, and telemedicine deployment.
-DEMO: https://youtu.be/-zfdNnzEZ3Q
-The system classifies retinal fundus images into **five stages of Diabetic Retinopathy** and provides visual explanations using **Grad-CAM**, while separate lesion-segmentation models provide additional evidence for retinal abnormalities such as microaneurysms, hemorrhages, and exudates.
+**LUMORA VISION** is a MATLAB-based clinical decision-support prototype for diabetic retinopathy (DR) screening from retinal fundus photographs. It combines automated image-quality assessment, DR grading, confidence estimation, lesion-level evidence, retinal structure analysis, Grad-CAM explainability, macular screening, clinician review, report generation, and a telemedicine workflow.
 
-The project is designed as a prototype for scalable DR screening, particularly for **rural and resource-constrained healthcare environments**.
+> **Research / prototype notice:** LUMORA VISION is intended for research, demonstration, and clinician decision-support workflow development. It is **not a medical diagnostic device** and does not replace examination or diagnosis by a qualified ophthalmologist.
 
 ---
 
-<<<<<<< HEAD
-## 📌 Project Overview
-=======
-`screenFundusImage` is the single integrated entry point. It returns a machine-readable structure containing quality gate outcome/recapture guidance, classifier output, lesion and anatomy evidence, macular screening assessment, calibrated confidence (when a fitted temperature is configured), explicit rule-grade audit trail, Grad-CAM availability, and report paths. The evidence-rule grade and classifier grade are both retained; disagreement is explicitly marked for clinician review.
+## Demo
 
-## Additional workflows
+A demonstration of the project is available here:
 
-- `calibrateTemperatureScaling(logits, labels, 'OutputFile', ...)` fits a scalar temperature using held-out validation logits only. Copy the fitted temperature into configuration only after documenting the split.
-- `validateScreeningDataset(imageDir, labelsTable)` produces a 5-class confusion matrix and referable sensitivity/specificity from real labels; it cannot run without a supplied dataset.
-- `createClinicianEvaluationForm('clinician_feedback.csv')` creates an empty ophthalmologist-review form.
-- `comparePipelineAblations(imageDir, labelsTable)` records a common-dataset ablation plan; it intentionally creates no results without data.
-- `MODEL_PROVENANCE.md` lists all supplied models as unverified because model cards were not supplied.
+**https://youtu.be/-zfdNnzEZ3Q**
 
-## Important correction to the uploaded implementation
->>>>>>> afc3f52 (Update diabetic retinopathy screening pipeline)
+---
 
-Diabetic Retinopathy is a diabetes-related eye disease that can lead to vision loss if it is not detected and treated early. Screening large populations using manual examination of retinal images can be time-consuming and requires trained ophthalmologists.
+## What LUMORA VISION Does
 
-Our system uses **deep learning-based image analysis** to assist in screening fundus photographs.
-
-Instead of treating the AI classifier as a black box, the system provides an explanation of **which regions of the retinal image contributed to the predicted DR classification**.
-
-### Core Pipeline
+The current application is organized around a clinician-facing workflow:
 
 ```text
-                    Fundus Photograph
-                           │
-                           ▼
-                ┌─────────────────────┐
-                │ Image Quality Check │
-                │ + Enhancement       │
-                └──────────┬──────────┘
-                           │
-              ┌────────────┴────────────┐
-              ▼                         ▼
-      DR Classification          Lesion Segmentation
-              │                         │
-              ▼                         ▼
-       DR Grade 0–4             Lesion Evidence
-       + Confidence          ┌──────────┼──────────┐
-                             ▼          ▼          ▼
-                         Microaneurysm Hemorrhage Exudate
-              │                         │
-              └────────────┬────────────┘
-                           ▼
-                    Explainability
-                           │
-                  ┌────────┴────────┐
-                  ▼                 ▼
-               Grad-CAM        Evidence Report
-                  │                 │
-                  └────────┬────────┘
-                           ▼
-                  Referable DR Decision
-                           │
-                           ▼
-                      MATLAB UI
-                           │
-                           ▼
-                       Simulink
-                  Telemedicine Model
+Fundus Image
+     │
+     ▼
+Image Selection & Case Intake
+     │
+     ▼
+Image Gradeability / Quality Gate
+     │
+     ├──────────────► Recapture / Review guidance when required
+     │
+     ▼
+Image Processing / Grading Image
+     │
+     ├──────────────────────┐
+     ▼                      ▼
+DR Classification       Lesion / Structure Analysis
+     │                      │
+     ▼                      ├── Microaneurysm
+DR Grade + Probability     ├── Hemorrhage
++ Confidence               ├── Exudate
+     │                      └── Retinal vessels / structures
+     │
+     ├──────────────┐
+     ▼              ▼
+Grad-CAM       Macular Screening
+     │              │
+     └──────┬───────┘
+            ▼
+   Evidence Workspace
+            │
+            ▼
+ Clinical Decision Support
+            │
+            ├── Referable probability
+            ├── Recommended action
+            ├── Anatomical context
+            └── Clinician notes
+            │
+            ▼
+      Evidence Report
+            │
+            ▼
+      Clinician Review
+            │
+            ▼
+   Telemedicine / Capacity Simulation
 ```
 
-<<<<<<< HEAD
----
-=======
-For the integrated GUI, run:
-
-```matlab
-app = DRScreeningApp;
-```
-
-For district capacity planning without opening Simulink, run
-`runTelemedicineWorkflow`. To run the supplied Simulink queue replay too,
-use `runTelemedicineWorkflow('UseSimulink',true)`.
-
-The main script lets an operator select an image, gates quality, enhances borderline images, runs DR grading and lesion evidence, generates an annotated report, and stores outputs under `results/`.
->>>>>>> afc3f52 (Update diabetic retinopathy screening pipeline)
-
-# 🎯 Objectives
-
-The primary objectives of this project are:
-
-* Automatically classify Diabetic Retinopathy severity from fundus photographs.
-* Provide a **5-class DR classification** from No DR to Proliferative DR.
-* Generate visual explanations using **Grad-CAM**.
-* Identify retinal regions that contributed to the classifier's prediction.
-* Provide additional lesion-level evidence using separate segmentation models.
-* Estimate prediction confidence.
-* Generate a simple patient-level explainability report.
-* Demonstrate a telemedicine workflow using **MATLAB/Simulink**.
-* Explore the scalability of AI-assisted screening for large patient populations.
-* Keep classification explanations and lesion segmentation as **independent complementary evidence sources**.
+The application is designed so that the AI prediction is presented together with **supporting visual and lesion-level evidence**, rather than as an unexplained classification.
 
 ---
 
-# 🧠 Deep Learning Models
+# Key Features
 
-## 1. DR Classification Model
+## 1. Case Intake
 
-A trained deep-learning image classification model is used to classify fundus photographs into five DR severity levels:
+The interface provides a structured case-intake area for:
 
-| Class | DR Grade                |
-| ----: | ----------------------- |
-|     0 | No Diabetic Retinopathy |
-|     1 | Mild DR                 |
-|     2 | Moderate DR             |
-|     3 | Severe DR               |
-|     4 | Proliferative DR        |
+- Case ID
+- Eye laterality
+- Capture date/time
+- Camera/device information
+- Reviewer status
+- Fundus image selection
 
-The classifier produces:
-
-```text
-Predicted Class
-Predicted DR Grade
-Class Probabilities
-Confidence Score
-```
-
-The existing trained classifier is used directly during inference.
-
-**The classifier is not retrained as part of the explainability pipeline.**
+The current UI also displays an overall assessment-readiness indicator so that the workflow can move from automated processing toward clinician review.
 
 ---
 
-# 🔍 Explainable AI
+## 2. Image Gradeability
+
+Before clinical interpretation, the selected fundus photograph passes through an image-quality / gradeability stage.
+
+The UI exposes:
+
+- **Gradeability status**
+- **Gradeability score**
+- Quality-gating information
+- Guidance for handling images that are not suitable for reliable screening
+
+This creates an explicit quality gate rather than forcing every image through the downstream screening pipeline.
+
+---
+
+## 3. Five-Class DR Screening
+
+The integrated classifier supports five diabetic retinopathy severity classes:
+
+| Grade | Classification |
+|---:|---|
+| 0 | No Diabetic Retinopathy |
+| 1 | Mild DR |
+| 2 | Moderate DR |
+| 3 | Severe DR |
+| 4 | Proliferative DR |
+
+The screening result can include:
+
+- DR screening grade
+- Class probability information
+- AI confidence
+- Referable probability
+- Prototype referral / action recommendation
+
+The classification output is intended as **decision support for clinician confirmation**.
+
+---
+
+# Current Clinical Result Panel
+
+The current LUMORA VISION UI presents the principal screening outputs together in a dedicated **Clinical Result • Screening Decision Support** section.
+
+It includes:
+
+### DR Screening Grade
+The predicted DR severity category.
+
+### Referable Probability
+A probability-style output used by the prototype's screening decision logic.
+
+### AI Confidence
+The model's confidence associated with the screening result.
+
+### Macular Screen
+A separate indication of whether macular involvement was detected by the current workflow.
+
+### Recommended Action
+A concise workflow recommendation such as routine follow-up or referral-oriented review, depending on the screening result and configured decision logic.
+
+> Referral thresholds and screening recommendations in this prototype should be treated as system-design parameters until clinically validated.
+
+---
+
+# Explainable AI
 
 ## Grad-CAM
 
-To make the DR classifier more interpretable, the system uses **Gradient-weighted Class Activation Mapping (Grad-CAM)**.
+LUMORA VISION uses **Gradient-weighted Class Activation Mapping (Grad-CAM)** to visualize image regions that contributed to the classifier's prediction.
 
-Grad-CAM uses gradients flowing into a selected convolutional feature layer to determine which spatial regions contributed most strongly to the model's prediction.
-
-### Grad-CAM Pipeline
+The conceptual process is:
 
 ```text
 Fundus Image
@@ -153,515 +171,613 @@ DR Classifier
 Predicted DR Class
      │
      ▼
-Selected Convolutional Layer
+Selected Convolutional Feature Layer
      │
      ▼
 Feature Maps + Gradients
      │
      ▼
-Global Average of Gradients
-     │
-     ▼
-Feature Map Weighting
+Gradient-Based Weighting
      │
      ▼
 Weighted Feature Maps
      │
      ▼
-ReLU
+ReLU + Normalization
      │
      ▼
-Normalized Heatmap
+Grad-CAM Heatmap
      │
      ▼
 Overlay on Fundus Image
 ```
 
-The Grad-CAM implementation uses **TensorFlow GradientTape**.
+The implementation uses TensorFlow `GradientTape` and inspects the supplied model architecture to locate a suitable convolutional feature layer rather than relying on one hard-coded layer name.
 
-The convolutional feature layer is selected automatically by inspecting the model architecture rather than assuming a particular layer name.
-
-This also allows the implementation to handle models containing nested CNN backbones such as architectures based on EfficientNet.
+This supports models containing nested CNN backbones, including architectures with EfficientNet-style components.
 
 ---
 
-# 🔬 Lesion-Level Evidence
+# Evidence Workspace
 
-Grad-CAM and lesion segmentation serve different purposes in the system.
+The current UI contains an **Image Evidence Workspace** where different evidence views can be inspected.
 
-Separate segmentation models are used to provide evidence for:
+Available views include:
 
-* **Microaneurysms**
-* **Hemorrhages**
-* **Exudates**
-* **Retinal vessels**
+- **Original**
+- **Grading image**
+- **Structure overlay**
+- **Lesion evidence**
+- **Grad-CAM**
 
-The lesion segmentation models produce masks identifying the corresponding retinal structures or abnormalities.
+The evidence workspace also supports an adjustable overlay opacity and provides a visual legend for the displayed evidence.
 
-### Important Design Principle
+The purpose is to let a clinician move between the original image, processed image, anatomical structures, lesion evidence, and model-attention visualization without treating any single visualization as a diagnosis.
 
-Grad-CAM is **not used to generate lesion masks**.
+---
 
-Instead:
+# Lesion-Level Evidence
+
+LUMORA VISION uses independent lesion / structure analysis to provide additional evidence.
+
+The current workflow includes evidence categories such as:
+
+- **Microaneurysms**
+- **Hemorrhages**
+- **Exudates**
+- **Retinal vessels / anatomical structures**
+
+The UI provides a dedicated **Lesion Evidence** panel with a structured evidence table. Detected findings can be selected and highlighted in the evidence workspace.
+
+## Important Design Principle
+
+Grad-CAM and lesion segmentation have different meanings:
 
 ```text
-                    Fundus Image
-                         │
-          ┌──────────────┴──────────────┐
-          ▼                             ▼
-     DR Classifier                Lesion Models
-          │                             │
-          ▼                             ▼
-      Grad-CAM                    Segmentation Masks
-          │                             │
-          ▼                             ▼
- Regions influencing             Lesion-specific
-   classification                   evidence
+                  Fundus Image
+                       │
+             ┌─────────┴─────────┐
+             ▼                   ▼
+       DR Classifier        Lesion Models
+             │                   │
+             ▼                   ▼
+         Grad-CAM          Segmentation Masks
+             │                   │
+             ▼                   ▼
+     Model-attribution       Lesion-specific
+         evidence               evidence
 ```
 
-These two methods are presented as **complementary explanation sources** rather than mathematically combining their outputs.
+**Grad-CAM is not used to generate lesion masks.**
 
-A highlighted Grad-CAM region should therefore **not automatically be interpreted as a confirmed lesion**.
+A highlighted Grad-CAM region means that the region contributed to the model's prediction. It should **not automatically be interpreted as a confirmed retinal lesion**.
+
+Lesion segmentation provides separate lesion-specific evidence.
 
 ---
 
-# 🩺 Explainability Report
+# Anatomical Context & Clinician Notes
 
-The system generates a patient-level report containing:
+The current interface includes an **Anatomical Context & Clinician Notes** section.
+
+The anatomical context area can display information such as:
+
+- Vessel-density information
+- Neovascularization screening status
+- Macular context
+
+The clinician-notes field is explicitly separated from the AI inference pathway so that reviewer observations can be recorded without being used as input to the AI inference.
+
+---
+
+# Screening Decision Support
+
+The application is designed around **AI-assisted screening decision support**, not autonomous diagnosis.
+
+A simplified output structure is:
 
 ```text
-DR Grade: Moderate
-Predicted Class: 2
-
-Confidence: 87%
-
-Referable DR: YES
-
-Evidence:
-✓ Microaneurysms detected
-✓ Hemorrhages detected
-✓ Exudates detected
-
-Explanation:
-Grad-CAM highlights retinal regions that
-contributed strongly to the classifier's
-prediction.
-
-Recommendation:
-Refer to ophthalmologist.
+Case information
+       │
+       ▼
+Image gradeability
+       │
+       ▼
+DR grade
+       │
+       ├── AI confidence
+       ├── Referable probability
+       ├── Macular screen
+       ├── Lesion evidence
+       ├── Anatomical context
+       └── Grad-CAM
+       │
+       ▼
+Recommended action
+       │
+       ▼
+Clinician confirmation
 ```
 
-The report combines:
-
-1. DR classifier prediction
-2. Prediction confidence
-3. Grad-CAM visualization
-4. Lesion segmentation evidence
-5. Referable DR decision
-6. Suggested referral action
+The interface explicitly communicates that **clinician confirmation is required**.
 
 ---
 
-# 🚨 Referable DR
+# Reports
 
-For the prototype, the system can derive a **referable DR decision** from the predicted DR severity/probability.
+LUMORA VISION supports generation and opening of an evidence-oriented screening report.
 
-The output structure is designed as:
+The current UI provides:
 
-```json
-{
-    "dr_grade": 0,
-    "referable_probability": 0.0,
-    "referable": false,
-    "lesion_evidence": {
-        "microaneurysm": false,
-        "hemorrhage": false,
-        "exudate": false
-    },
-    "vessel_mask": "...",
-    "gradcam": "...",
-    "confidence": 0.0,
-    "report": "..."
-}
-```
+- **Generate Report**
+- **Open Report**
+- Patient/case-level screening information
+- Model and evidence outputs
+- Visual evidence
+- Screening decision support information
 
-The exact referral threshold should be treated as a **prototype/system-design parameter**, not as a clinically validated diagnostic threshold.
+The report-generation workflow is implemented through the project's MATLAB reporting functions.
 
 ---
 
-# 🖼️ Grad-CAM Outputs
+# MATLAB Application
 
-For each input fundus photograph, the explainability pipeline generates:
+The integrated GUI is launched with:
 
-### Original Image
+```matlab
+app = DRScreeningApp;
+```
 
-The original fundus photograph supplied to the classifier.
+The application brings the major screening functions together into a single clinician-facing workflow.
 
-### Grad-CAM Heatmap
+The main application flow is:
 
-A heatmap representing the regions contributing to the predicted class.
+1. Select a fundus image.
+2. Enter or confirm case information.
+3. Check image gradeability.
+4. Run AI assessment.
+5. Review DR screening grade.
+6. Review referable probability and AI confidence.
+7. Inspect lesion and anatomical evidence.
+8. Inspect original, grading, structure, lesion, and Grad-CAM views.
+9. Review macular screening status.
+10. Add clinician notes if required.
+11. Generate or open the evidence report.
+12. Complete clinician review.
 
-### Grad-CAM Overlay
+---
 
-The Grad-CAM heatmap overlaid on the original fundus image.
+# Main MATLAB Components
 
-### Numerical Heatmap
+The repository contains modular MATLAB components corresponding to the screening workflow.
 
-The normalized Grad-CAM activation map is also saved as a NumPy array.
+| File | Purpose |
+|---|---|
+| `DRScreeningApp.m` | Main clinician-facing MATLAB application |
+| `main_DR_Screening.m` | Main / scripted screening workflow |
+| `screenFundusImage.m` | Integrated screening entry point |
+| `checkImageQuality.m` | Fundus-image quality / gradeability assessment |
+| `runlesionModel.m` | Lesion-model inference |
+| `segmentRetinalStructures.m` | Retinal structure / vessel segmentation |
+| `assessMacularInvolvement.m` | Macular involvement screening |
+| `gradeDiabetesRetinopathyViaRules.m` | Rule-based evidence / screening grading logic |
+| `computeGradCAM.m` | Grad-CAM computation |
+| `buildAnnotatedReport.m` | Annotated evidence / report generation |
+| `loadONNXModelCached.m` | Cached ONNX model loading |
+| `runTelemedicineWorkflow.m` | Telemedicine / capacity workflow |
+| `simulateScreeningCapacity.m` | Screening-capacity simulation |
+| `comparePipelineAblations.m` | Pipeline ablation planning / comparison |
+| `createClinicianEvaluationForm.m` | Clinician evaluation form generation |
+| `prototypeConfig.json` | Prototype configuration |
+| `DRProcessor.prj` | MATLAB project file |
+
+---
+
+# Integrated Entry Point
+
+`screenFundusImage` is the central integrated processing entry point.
+
+Conceptually, it connects:
 
 ```text
-original.png
-gradcam_heatmap.png
-gradcam_overlay.png
-gradcam_heatmap.npy
+Input image
+    │
+    ├── Quality gate
+    ├── DR classification
+    ├── Lesion evidence
+    ├── Anatomical evidence
+    ├── Macular screening
+    ├── Confidence / probability outputs
+    ├── Grad-CAM
+    ├── Rule-based audit information
+    └── Report generation
+             │
+             ▼
+       Structured result
 ```
 
----
-
-# 🛠️ Technologies Used
-
-## Programming Languages
-
-* Python
-* MATLAB
-
-## Deep Learning
-
-* TensorFlow
-* Keras
-
-## Explainable AI
-
-* Grad-CAM
-* TensorFlow `GradientTape`
-
-## Image Processing
-
-* NumPy
-* Pillow
-* Matplotlib
-* MATLAB Image Processing Toolbox
-
-## Simulation
-
-* MATLAB
-* Simulink
-
-## Development Environment
-
-* Kaggle Notebooks
-* MATLAB
+The evidence-rule grade and classifier grade can be retained independently so that disagreement is visible for clinician review rather than silently hidden.
 
 ---
 
-# 🧩 System Architecture
+# Model Handling
 
-The complete prototype consists of several independent modules.
+The project uses supplied trained models for inference.
+
+The screening pipeline is designed to load the available ONNX / deep-learning models and use them directly during inference.
+
+**The explainability pipeline does not retrain the DR classifier.**
+
+Model provenance should be documented separately for any deployment or formal evaluation. Supplied model files should not be treated as clinically validated merely because they can be executed successfully.
+
+---
+
+# Telemedicine Workflow
+
+The project also demonstrates how AI-assisted retinal screening could fit into a telemedicine workflow using MATLAB / Simulink.
 
 ```text
-┌─────────────────────────────────────────────┐
-│                INPUT FUNDUS                 │
-│              RGB Photograph                │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-              Image Quality Check
-                       │
-                       ▼
-                 Enhancement
-                       │
-            ┌──────────┴──────────┐
-            │                     │
-            ▼                     ▼
-      DR Classifier        Lesion/Vessel Models
-            │                     │
-            ▼                     ▼
-       DR Grade              Lesion Masks
-       Confidence                  │
-            │                      │
-            ▼                      │
-         Grad-CAM                  │
-            │                      │
-            └──────────┬───────────┘
-                       ▼
-                Explainability
-                    Report
-                       │
-                       ▼
-               Referable Decision
-                       │
-                       ▼
-                  MATLAB UI
-                       │
-                       ▼
-                   Simulink
-                       │
-                       ▼
-              Telemedicine Workflow
+Rural / Community Camera
+          │
+          ▼
+   Image Acquisition
+          │
+          ▼
+    Quality Check
+          │
+          ▼
+     AI Screening
+          │
+          ▼
+     Explainability
+          │
+          ▼
+ Remote Ophthalmologist
+          │
+          ▼
+       Referral
+```
+
+The simulation can be used to study operational constraints such as:
+
+- Patients per day
+- Image acquisition time
+- AI inference time
+- Network bandwidth
+- Transmission delay
+- Ophthalmologist review capacity
+- Queue length
+- Waiting time
+- Referral workload
+- System throughput
+
+For district-capacity planning without opening Simulink:
+
+```matlab
+runTelemedicineWorkflow
+```
+
+To include the supplied Simulink queue-replay workflow:
+
+```matlab
+runTelemedicineWorkflow('UseSimulink', true)
 ```
 
 ---
 
-# 📊 Telemedicine Simulation
+# Screening Capacity
 
-A simplified telemedicine workflow is modeled using **Simulink**.
+The prototype explores scalability for populations of **100,000+ patients per year**.
 
-```text
-Rural Camera
-     │
-     ▼
-Image Acquisition
-     │
-     ▼
-Quality Check
-     │
-     ▼
-AI Screening
-     │
-     ▼
-Explainability
-     │
-     ▼
-Remote Ophthalmologist
-     │
-     ▼
-Referral
-```
-
-The simulation considers parameters such as:
-
-* Patients per day
-* Image acquisition time
-* AI inference time
-* Network bandwidth
-* Transmission delay
-* Ophthalmologist review capacity
-* Queue length
-* Waiting time
-* Referral workload
-* System throughput
-
----
-
-# 📈 Scalability Target
-
-The prototype explores whether an AI-assisted screening workflow can support screening at a scale of **100,000+ patients per year**.
-
-For reference:
+For a simple reference point:
 
 ```text
 100,000 patients / 365 days
 ≈ 274 patients/day
 ```
 
-The Simulink model can therefore be used to evaluate whether the simulated workflow can handle approximately **274 patients per day** under different system configurations.
+The telemedicine simulation can therefore be used to investigate whether different combinations of acquisition, inference, network, and clinician-review capacity can support approximately 274 patients per day.
+
+This is a **simulation target**, not a claim of real-world clinical throughput.
 
 ---
 
-# 📁 Repository Structure
+# Additional Evaluation Workflows
 
-A suggested repository structure is:
+The repository also contains supporting evaluation utilities.
+
+## Temperature Scaling
+
+```matlab
+calibrateTemperatureScaling(logits, labels, 'OutputFile', ...)
+```
+
+This fits a scalar temperature using held-out validation logits. A fitted temperature should only be copied into production configuration after the validation split and calibration procedure have been documented.
+
+## Dataset Validation
+
+```matlab
+validateScreeningDataset(imageDir, labelsTable)
+```
+
+This can produce a five-class confusion matrix and referable sensitivity/specificity when a real labeled dataset is supplied.
+
+The evaluation cannot produce meaningful dataset-level performance results without an appropriate labeled dataset.
+
+## Clinician Evaluation
+
+```matlab
+createClinicianEvaluationForm('clinician_feedback.csv')
+```
+
+Creates an empty clinician / ophthalmologist review form for structured feedback.
+
+## Pipeline Ablations
+
+```matlab
+comparePipelineAblations(imageDir, labelsTable)
+```
+
+Records or supports a common-dataset ablation workflow. It intentionally does not fabricate evaluation results when data are unavailable.
+
+---
+
+# Repository Structure
+
+The current repository is organized around MATLAB application code, screening modules, configuration, documentation, and supporting presentation material.
 
 ```text
-Explainable-AI-DR/
+LUMORA-VISION/
 │
 ├── README.md
+├── CONTRIBUTORS
+├── README
 │
-├── python/
-│   ├── gradcam.py
-│   ├── model_inspection.py
-│   └── requirements.txt
+├── DRProcessor.prj
+├── DRScreeningApp.m
+├── main_DR_Screening.m
+├── prototypeConfig.json
 │
-├── matlab/
-│   ├── preprocessing/
-│   ├── explainability/
-│   ├── report_generation/
-│   └── ui/
+├── screenFundusImage.m
+├── checkImageQuality.m
+├── gradeDiabetesRetinopathyViaRules.m
+├── runlesionModel.m
+├── segmentRetinalStructures.m
+├── assessMacularInvolvement.m
+├── computeGradCAM.m
 │
-├── simulink/
-│   ├── telemedicine_model.slx
-│   └── simulation_parameters.m
+├── loadONNXModelCached.m
+├── buildAnnotatedReport.m
 │
-├── outputs/
-│   ├── original.png
-│   ├── gradcam_heatmap.png
-│   ├── gradcam_overlay.png
-│   └── gradcam_heatmap.npy
+├── runTelemedicineWorkflow.m
+├── simulateScreeningCapacity.m
 │
-├── sample_images/
+├── comparePipelineAblations.m
+├── createClinicianEvaluationForm.m
 │
-└── docs/
-    ├── architecture.png
-    └── system_workflow.png
+├── LumoraVision SIH.pptx
+│
+└── docs / outputs / model files
+    └── as supplied or generated by the project workflow
+```
+
+> The exact model and output directories may vary with the local project setup.
+
+---
+
+# Technologies
+
+## Programming
+
+- MATLAB
+- Python
+
+## Deep Learning
+
+- TensorFlow
+- Keras
+- ONNX model inference
+
+## Explainable AI
+
+- Grad-CAM
+- TensorFlow `GradientTape`
+
+## Image Processing
+
+- MATLAB Image Processing Toolbox
+- NumPy
+- Pillow
+- Matplotlib
+
+## Simulation
+
+- MATLAB
+- Simulink
+
+## Development
+
+- MATLAB
+- Kaggle Notebooks
+
+---
+
+# End-to-End Example
+
+A typical operator session looks like this:
+
+```text
+1. Create / load case
+        │
+2. Select right or left fundus image
+        │
+3. Confirm capture information
+        │
+4. Run AI assessment
+        │
+5. Gradeability check
+        │
+6. DR screening classification
+        │
+7. Confidence + referable probability
+        │
+8. Lesion evidence
+        │
+9. Anatomical context
+        │
+10. Macular screening
+        │
+11. Grad-CAM visualization
+        │
+12. Clinician review
+        │
+13. Generate / open report
+        │
+14. Continue to telemedicine workflow if required
 ```
 
 ---
 
-# 🔄 End-to-End Workflow
+# Interpreting the Evidence
 
-The system processes a fundus image through the following stages:
+LUMORA VISION intentionally separates different types of evidence.
 
-### 1. Image Acquisition
+### Classifier output
+Answers:
 
-A retinal fundus photograph is obtained from a camera or imaging device.
+> **What DR class did the model predict?**
 
-### 2. Image Quality Assessment
+### AI confidence / probability
+Answers:
 
-The image is checked for quality issues such as insufficient visibility or unsuitable input.
+> **How strongly does the model support its screening output?**
 
-### 3. Image Enhancement
+### Grad-CAM
+Answers:
 
-Image-processing techniques are applied where required to improve the quality of the retinal photograph.
+> **Which image regions contributed to the model's prediction?**
 
-### 4. DR Classification
+### Lesion segmentation
+Answers:
 
-The trained classifier predicts one of five DR grades.
+> **Where did the lesion-specific models identify candidate abnormalities?**
 
-### 5. Confidence Estimation
+### Anatomical context
+Provides additional structural information for review.
 
-The class probabilities are used to obtain the model's prediction confidence.
+These outputs should be considered **complementary**, not interchangeable.
 
-### 6. Grad-CAM Explanation
-
-Grad-CAM identifies regions that contributed to the predicted DR class.
-
-### 7. Lesion Analysis
-
-Independent segmentation models identify retinal lesions and structures.
-
-### 8. Evidence Presentation
-
-Classifier output, Grad-CAM visualization, and lesion evidence are presented together.
-
-### 9. Referral Decision
-
-A prototype referable/non-referable decision is generated.
-
-### 10. Telemedicine Simulation
-
-The complete workflow is evaluated in Simulink under different patient loads and system constraints.
-
----
-
-# ⚠️ Important Interpretation
-
-Grad-CAM provides **model attribution**, not a medical diagnosis.
-
-A highlighted region means:
-
-> "This region contributed strongly to the model's prediction."
-
-It does **not** necessarily mean:
-
-> "This region contains a confirmed diabetic-retinopathy lesion."
-
-Lesion segmentation provides separate lesion-specific evidence.
-
-Therefore, the system intentionally keeps:
+In particular:
 
 ```text
 Grad-CAM
    ≠
-Lesion Segmentation
+Confirmed lesion
 ```
 
-They are complementary explanations.
-
----
-
-# 🎯 Key Features
-
-* 5-class Diabetic Retinopathy classification
-* Automated model architecture inspection
-* Automatic Grad-CAM convolutional-layer selection
-* Gradient-based visual explanations
-* Fundus image heatmap generation
-* Original/heatmap/overlay visualization
-* Numerical Grad-CAM output
-* Prediction confidence
-* Lesion-level evidence
-* Patient-level explainability report
-* Referable DR decision
-* MATLAB integration
-* Simulink telemedicine simulation
-* Scalability analysis for 100,000+ patients/year
-
----
-
-# 🚀 Future Improvements
-
-Possible future extensions include:
-
-* Better image-quality assessment
-* Lesion-aware explainability
-* Uncertainty and confidence calibration
-* Multi-model ensemble classification
-* More robust retinal lesion segmentation
-* Clinical validation on larger datasets
-* Real-time deployment on edge devices
-* Low-bandwidth image transmission
-* Integration with telemedicine platforms
-* Prospective clinical evaluation
-
----
-
-# ⚕️ Disclaimer
-
-This project is a **research/hackathon prototype** intended to demonstrate AI-assisted diabetic retinopathy screening and explainability.
-
-It is **not a medical diagnostic device** and should not be used as a substitute for examination or diagnosis by a qualified ophthalmologist.
-
-The Grad-CAM visualizations represent model attribution and should not be interpreted as definitive lesion localization.
-
----
-
-# 👥 Project Contributions
-
-The project is divided into modular components:
-
-### DR Classification
-
-Development and integration of the trained DR classification model.
-
-### Lesion & Vessel Analysis
-
-Development/integration of segmentation models for retinal lesions and vessels.
-
-### Explainability & System Simulation
-
-* Grad-CAM implementation
-* Model interpretability
-* Explainability report generation
-* Evidence presentation
-* MATLAB integration
-* Simulink telemedicine workflow
-* Scalability simulation
-
----
-
-# 🌟 Project Goal
-
-The ultimate goal is to demonstrate how **AI-based retinal screening can be made more transparent and deployable**, allowing healthcare professionals to see not only the predicted DR severity but also the visual and lesion-level evidence associated with the prediction.
+and
 
 ```text
-                    AI Screening
-                         │
-                         ▼
-                 Prediction
-                         │
-                         ▼
-                  Explanation
-                         │
-            ┌────────────┴────────────┐
-            ▼                         ▼
-        Grad-CAM                Lesion Evidence
-            │                         │
-            └────────────┬────────────┘
-                         ▼
-                  Human Review
-                         │
-                         ▼
-              Better-informed referral
+AI screening result
+   ≠
+Final medical diagnosis
 ```
 
-**Explainable AI for more transparent and scalable diabetic retinopathy screening.**
+---
+
+# Clinical Safety and Limitations
+
+This prototype has several important limitations:
+
+- It has not been established as a medical diagnostic device.
+- Model performance depends on the training data, supplied model, image quality, and deployment conditions.
+- A high AI confidence score does not guarantee clinical correctness.
+- Grad-CAM is an attribution method, not definitive lesion localization.
+- Lesion segmentation outputs are model-generated evidence and require clinical interpretation.
+- Referral thresholds should not be assumed to be clinically validated.
+- Dataset-level sensitivity, specificity, calibration, and generalization must be evaluated on appropriate independent clinical datasets before deployment.
+- Human / ophthalmologist review remains part of the intended workflow.
+
+---
+
+# Future Development
+
+Potential next steps include:
+
+- Stronger image-quality assessment and recapture guidance
+- More robust lesion segmentation
+- Improved uncertainty and probability calibration
+- Lesion-aware explainability
+- Multi-model / ensemble screening
+- Independent clinical validation
+- Prospective evaluation
+- Real-time or edge-device deployment
+- Low-bandwidth telemedicine transmission
+- Integration with clinical / telemedicine platforms
+- Expanded clinician feedback collection
+- More extensive capacity and queue simulations
+
+---
+
+# Project Goal
+
+The goal of LUMORA VISION is to demonstrate a **transparent, evidence-oriented, and scalable AI-assisted retinal screening workflow**.
+
+Instead of presenting only a DR prediction, the system brings together:
+
+```text
+                 AI Screening
+                      │
+                      ▼
+                  DR Result
+                      │
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+      Confidence   Grad-CAM   Lesion Evidence
+          │           │           │
+          └───────────┼───────────┘
+                      ▼
+              Anatomical Context
+                      │
+                      ▼
+             Clinician Review
+                      │
+                      ▼
+             Screening Action
+                      │
+                      ▼
+               Evidence Report
+```
+
+The intended outcome is **better-informed clinician review**, while keeping the distinction between model prediction, model attribution, lesion evidence, and clinical diagnosis explicit.
+
+---
+
+## Disclaimer
+
+**LUMORA VISION is a research / hackathon prototype for AI-assisted diabetic retinopathy screening and explainability. It is not a medical diagnostic device and should not be used as a substitute for examination or diagnosis by a qualified healthcare professional.**
+
+All clinical decisions must be made by appropriately qualified clinicians using the complete clinical context.
+
+---
+
+## Project Credits
+
+The project is modular and includes work across:
+
+- DR classification
+- Image quality and preprocessing
+- Lesion and vessel analysis
+- Macular screening
+- Explainable AI / Grad-CAM
+- Clinical evidence presentation
+- MATLAB application development
+- Report generation
+- Telemedicine workflow modeling
+- Screening-capacity simulation
+- Clinician evaluation
+
+---
+
+**LUMORA VISION — Explainable AI for more transparent and scalable diabetic retinopathy screening.**
+
