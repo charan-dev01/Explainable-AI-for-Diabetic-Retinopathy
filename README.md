@@ -8,7 +8,21 @@ The project is designed as a prototype for scalable DR screening, particularly f
 
 ---
 
+<<<<<<< HEAD
 ## 📌 Project Overview
+=======
+`screenFundusImage` is the single integrated entry point. It returns a machine-readable structure containing quality gate outcome/recapture guidance, classifier output, lesion and anatomy evidence, macular screening assessment, calibrated confidence (when a fitted temperature is configured), explicit rule-grade audit trail, Grad-CAM availability, and report paths. The evidence-rule grade and classifier grade are both retained; disagreement is explicitly marked for clinician review.
+
+## Additional workflows
+
+- `calibrateTemperatureScaling(logits, labels, 'OutputFile', ...)` fits a scalar temperature using held-out validation logits only. Copy the fitted temperature into configuration only after documenting the split.
+- `validateScreeningDataset(imageDir, labelsTable)` produces a 5-class confusion matrix and referable sensitivity/specificity from real labels; it cannot run without a supplied dataset.
+- `createClinicianEvaluationForm('clinician_feedback.csv')` creates an empty ophthalmologist-review form.
+- `comparePipelineAblations(imageDir, labelsTable)` records a common-dataset ablation plan; it intentionally creates no results without data.
+- `MODEL_PROVENANCE.md` lists all supplied models as unverified because model cards were not supplied.
+
+## Important correction to the uploaded implementation
+>>>>>>> afc3f52 (Update diabetic retinopathy screening pipeline)
 
 Diabetic Retinopathy is a diabetes-related eye disease that can lead to vision loss if it is not detected and treated early. Screening large populations using manual examination of retinal images can be time-consuming and requires trained ophthalmologists.
 
@@ -57,7 +71,21 @@ Instead of treating the AI classifier as a black box, the system provides an exp
                   Telemedicine Model
 ```
 
+<<<<<<< HEAD
 ---
+=======
+For the integrated GUI, run:
+
+```matlab
+app = DRScreeningApp;
+```
+
+For district capacity planning without opening Simulink, run
+`runTelemedicineWorkflow`. To run the supplied Simulink queue replay too,
+use `runTelemedicineWorkflow('UseSimulink',true)`.
+
+The main script lets an operator select an image, gates quality, enhances borderline images, runs DR grading and lesion evidence, generates an annotated report, and stores outputs under `results/`.
+>>>>>>> afc3f52 (Update diabetic retinopathy screening pipeline)
 
 # 🎯 Objectives
 

@@ -1,0 +1,11 @@
+# MATLAB / Simulink generated files
+*.asv
+*.autosave
+*.slxc
+slprj/
+codegen/
+results/
+test_images/
+.DS_Store
+Thumbs.db
+.vscode/

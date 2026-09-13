@@ -1,949 +1,1358 @@
 classdef DRScreeningApp < handle
-    % DRScreeningApp
-    % MATLAB R2026a-compatible programmatic UI for the diabetic
-    % retinopathy screening prototype.
-    %
-    % Run:
-    %   app = DRScreeningApp;
-    %
-    % Required project files/functions are the same ones used by
-    % main_DR_Screening.m.
+    %DRSCREENINGAPP Clinician-first UI for the integrated Retina Assist pipeline.
+    % This app is decision support only; it never represents AI output as diagnosis.
 
     properties
-        % Main UI
         UIFigure
-        MainGrid
+        RootGrid
         HeaderPanel
-        InputPanel
-        ResultsPanel
-        ImagePanel
-        LesionPanel
-        StructurePanel
+        IntakePanel
+        ResultPanel
+        WorkspacePanel
+        EvidencePanel
+        AnatomyPanel
         FooterPanel
+        ContentGrid
 
-        % Header
-        StatusLamp
-        StatusLabel
-
-        % Input
+        CaseIdField
+        EyeDropDown
+        CaptureField
+        DeviceField
+        ReviewerDropDown
         SelectImageButton
         RunButton
-        FileNameLabel
+        ReportButton
+        OpenReportButton
+        NewCaseButton
+
+        StatusLamp
+        StatusLabel
+        CaseHeaderLabel
         QualityLabel
+        ActionLabel
+        ActionPriorityLabel
+        ActionRationaleLabel
+        GradeLabel
+        ReferableLabel
+        ConfidenceLabel
+        MacularLabel
+        ModelLabel
 
-        % Image axes
-        OriginalAxes
-        GradingAxes
-        StructuresAxes
-        MicroaneurysmAxes
-        HemorrhageAxes
-        GradCAMAxes
+        MainAxes
+        ViewTitle
+        OverlaySlider
+        OverlayLabel
+        LegendLabel
+        ViewButtons
 
-        % Results
-        GradeValue
-        ConfidenceValue
-        ReferableValue
-        DecisionValue
+        EvidenceTable
+        HighlightButton
+        AnatomyLabel
+        NotesArea
+        TechnicalArea
+        DetailsButton
 
-        % Lesions / structures
-        LesionTable
-        OpticDiscLabel
-        FoveaLabel
-        VesselDensityLabel
-        NVLabel
-
-        % Footer
-        GeneratePDFButton
-        OpenPDFButton
-        ClearButton
-
-        % Application state
         SelectedImageFile = ""
         SelectedImage = []
-        Net = []
-        Config = struct()
         LastResult = []
-        LastQuality = []
-        LastLesions = []
-        LastStructures = []
-        LastCAM = []
-        LastReport = []
-        LastPDF = ""
+        ImageViews = struct()
+        CurrentView = "original"
+
+        % Selected row in the lesion evidence table.
+        SelectedEvidenceIndex = []
+
+        % Reusable clinical colors.
+        Colors = struct()
     end
 
     methods
         function app = DRScreeningApp
             app.createUI();
+            app.showEmptyState('Select a fundus image to begin a clinician-reviewed assessment.');
         end
 
         function createUI(app)
-            % Main window
+            %% White clinical design system
+            app.Colors.page      = [1.00 1.00 1.00];
+            app.Colors.surface   = [1.00 1.00 1.00];
+            app.Colors.subtle    = [0.97 0.98 0.99];
+            app.Colors.border    = [0.78 0.82 0.87];
+            app.Colors.ink       = [0.10 0.15 0.20];
+            app.Colors.muted     = [0.32 0.39 0.46];
+            app.Colors.blue      = [0.05 0.39 0.70];
+            app.Colors.blueDark  = [0.03 0.25 0.48];
+            app.Colors.green     = [0.08 0.50 0.26];
+            app.Colors.amber     = [0.72 0.43 0.04];
+            app.Colors.red       = [0.72 0.18 0.14];
+
             app.UIFigure = uifigure( ...
-            'Name','Diabetic Retinopathy Screening', ...
-            'Position',[40 40 1450 920], ...
-            'Color',[0.96 0.97 0.98]);
+                'Name','LUMORA VISION | DR Screening', ...
+                'Position',[35 28 1500 960], ...
+                'Color',app.Colors.page, ...
+                'Scrollable','on', ...
+                'AutoResizeChildren','off');
 
-            app.UIFigure.CloseRequestFcn = @(src,event)delete(app);
+            app.UIFigure.SizeChangedFcn = @(~,~)app.adaptLayout();
+            app.UIFigure.CloseRequestFcn = @(~,~)delete(app);
 
-            % Main layout
-            app.MainGrid = uigridlayout(app.UIFigure,[5 1]);
-            app.MainGrid.RowHeight = {78,155,'1x',145,62};
-            app.MainGrid.ColumnWidth = {'1x'};
-            app.MainGrid.Padding = [12 12 12 12];
-            app.MainGrid.RowSpacing = 10;
+            app.RootGrid = uigridlayout(app.UIFigure,[5 1]);
+            app.RootGrid.RowHeight = {66,154,158,'1x',62};
+            app.RootGrid.Padding = [16 14 16 14];
+            app.RootGrid.RowSpacing = 10;
+            app.RootGrid.BackgroundColor = app.Colors.page;
 
-            % =========================================================
-            % HEADER
-            % =========================================================
-            app.HeaderPanel = uipanel(app.MainGrid);
-            app.HeaderPanel.BorderType = 'none';
-            app.HeaderPanel.BackgroundColor = [0.08 0.16 0.24];
+            %% Header: white, never dark
+            app.HeaderPanel = uipanel(app.RootGrid, ...
+                'BorderType','line', ...
+                'BackgroundColor',app.Colors.surface, ...
+                'ForegroundColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'HighlightColor',app.Colors.border);
 
-            hg = uigridlayout(app.HeaderPanel,[1 2]);
-            hg.ColumnWidth = {'1x',220};
-            hg.RowHeight = {'1x'};
-            hg.Padding = [18 8 18 8];
+            hg = uigridlayout(app.HeaderPanel,[1 3]);
+            hg.ColumnWidth = {260,'1x',360};
+            hg.Padding = [16 8 16 8];
+            hg.ColumnSpacing = 12;
+            hg.BackgroundColor = app.Colors.surface;
 
-            titleGrid = uigridlayout(hg,[2 1]);
-            titleGrid.Layout.Row = 1;
-            titleGrid.Layout.Column = 1;
-            titleGrid.RowHeight = {'1x','1x'};
-            titleGrid.Padding = [0 0 0 0];
+            uilabel(hg, ...
+                'Text','LUMORA VISION', ...
+                'FontSize',22, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.blueDark, ...
+                'VerticalAlignment','center');
 
-            title = uilabel(titleGrid);
-            title.Text = 'DIABETIC RETINOPATHY SCREENING';
-            title.FontSize = 21;
-            title.FontWeight = 'bold';
-            title.FontColor = [1 1 1];
-            title.Layout.Row = 1;
-            title.Layout.Column = 1;
+            app.CaseHeaderLabel = uilabel(hg, ...
+                'Text','CASE: —  |  EYE: —  |  REVIEW: NOT STARTED', ...
+                'FontSize',12, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.ink, ...
+                'HorizontalAlignment','center', ...
+                'VerticalAlignment','center', ...
+                'WordWrap','on');
+            app.CaseHeaderLabel.Layout.Column = 2;
 
-            sub = uilabel(titleGrid);
-            sub.Text = 'Human-in-the-loop retinal image assessment prototype';
-            sub.FontSize = 11;
-            sub.FontColor = [0.82 0.88 0.93];
-            sub.Layout.Row = 2;
-            sub.Layout.Column = 1;
+            sg = uigridlayout(hg,[1 2]);
+            sg.Layout.Column = 3;
+            sg.ColumnWidth = {20,'1x'};
+            sg.Padding = [2 0 2 0];
+            sg.ColumnSpacing = 8;
+            sg.BackgroundColor = app.Colors.surface;
 
-            statusGrid = uigridlayout(hg,[1 2]);
-            statusGrid.Layout.Row = 1;
-            statusGrid.Layout.Column = 2;
-            statusGrid.ColumnWidth = {25,'1x'};
-            statusGrid.Padding = [0 15 0 15];
-
-            app.StatusLamp = uilamp(statusGrid);
-            app.StatusLamp.Layout.Row = 1;
-            app.StatusLamp.Layout.Column = 1;
-
-            app.StatusLabel = uilabel(statusGrid);
-            app.StatusLabel.Text = 'Ready';
-            app.StatusLabel.FontColor = [1 1 1];
-            app.StatusLabel.FontWeight = 'bold';
-            app.StatusLabel.HorizontalAlignment = 'right';
-            app.StatusLabel.Layout.Row = 1;
+            app.StatusLamp = uilamp(sg,'Color',app.Colors.green);
+            app.StatusLabel = uilabel(sg, ...
+                'Text','READY FOR CASE INTAKE', ...
+                'FontSize',11, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.ink, ...
+                'HorizontalAlignment','right', ...
+                'VerticalAlignment','center', ...
+                'WordWrap','on');
             app.StatusLabel.Layout.Column = 2;
 
-            % =========================================================
-            % INPUT PANEL
-            % =========================================================
-            app.InputPanel = uipanel(app.MainGrid);
-            app.InputPanel.Title = 'Case Input & Image Quality';
-            app.InputPanel.FontWeight = 'bold';
+            %% Intake
+            app.IntakePanel = uipanel(app.RootGrid, ...
+                'Title','CASE INTAKE & IMAGE GRADEABILITY', ...
+                'ForegroundColor',app.Colors.ink, ...
+                'BackgroundColor',app.Colors.surface, ...
+                'HighlightColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'FontWeight','bold');
 
-            ig = uigridlayout(app.InputPanel,[2 4]);
-            ig.RowHeight = {45,45};
-            ig.ColumnWidth = {150,'1x',150,'1x'};
-            ig.Padding = [12 8 12 8];
-            ig.RowSpacing = 8;
+            ig = uigridlayout(app.IntakePanel,[4 6]);
+            ig.RowHeight = {42,18,32,32};
+            ig.ColumnWidth = {175,175,'1x',155,190,190};
+            ig.Padding = [16 10 16 10];
+            ig.RowSpacing = 4;
             ig.ColumnSpacing = 10;
+            ig.BackgroundColor = app.Colors.surface;
 
-            app.SelectImageButton = uibutton(ig,'push');
-            app.SelectImageButton.Text = 'Select Fundus Image';
-            app.SelectImageButton.FontWeight = 'bold';
-            app.SelectImageButton.ButtonPushedFcn = @(src,event)app.selectImage();
+            app.SelectImageButton = uibutton(ig, ...
+                'Text',['' char(128194) ' SELECT FUNDUS IMAGE'], ...
+                'ButtonPushedFcn',@(~,~)app.selectImage());
             app.SelectImageButton.Layout.Row = 1;
             app.SelectImageButton.Layout.Column = 1;
+            app.styleButton(app.SelectImageButton,'primary');
 
-            app.FileNameLabel = uilabel(ig);
-            app.FileNameLabel.Text = 'No image selected';
-            app.FileNameLabel.FontColor = [0.25 0.30 0.38];
-            app.FileNameLabel.Layout.Row = 1;
-            app.FileNameLabel.Layout.Column = 2;
-
-            app.RunButton = uibutton(ig,'push');
-            app.RunButton.Text = 'RUN SCREENING';
-            app.RunButton.FontWeight = 'bold';
-            app.RunButton.ButtonPushedFcn = @(src,event)app.runScreening();
+            app.RunButton = uibutton(ig, ...
+                'Text',['' char(9654) ' RUN AI ASSESSMENT'], ...
+                'ButtonPushedFcn',@(~,~)app.runScreening());
             app.RunButton.Layout.Row = 1;
-            app.RunButton.Layout.Column = 3;
+            app.RunButton.Layout.Column = 2;
+            app.styleButton(app.RunButton,'primary');
 
-            app.QualityLabel = uilabel(ig);
-            app.QualityLabel.Text = 'Quality: --';
+            app.QualityLabel = uilabel(ig, ...
+                'Text','GRADEABILITY: NOT ASSESSED', ...
+                'FontSize',11, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.muted, ...
+                'VerticalAlignment','center', ...
+                'WordWrap','on');
             app.QualityLabel.Layout.Row = 1;
-            app.QualityLabel.Layout.Column = 4;
+            app.QualityLabel.Layout.Column = [3 4];
 
-            helpLabel = uilabel(ig);
-            helpLabel.Text = 'Select a retinal fundus image, then run the complete screening pipeline.';
-            helpLabel.FontColor = [0.35 0.40 0.45];
-            helpLabel.Layout.Row = 2;
-            helpLabel.Layout.Column = [1 4];
+            app.ReviewerDropDown = uidropdown(ig, ...
+                'Items',{'Reviewer: pending','Reviewer: in review','Reviewer: confirmed'}, ...
+                'Value','Reviewer: pending', ...
+                'ValueChangedFcn',@(~,~)app.updateCaseHeader());
+            app.ReviewerDropDown.Layout.Row = 1;
+            app.ReviewerDropDown.Layout.Column = [5 6];
 
-            % =========================================================
-            % CENTRAL IMAGE AREA
-            % =========================================================
-            app.ImagePanel = uipanel(app.MainGrid);
-            app.ImagePanel.Title = 'Image Analysis';
-            app.ImagePanel.FontWeight = 'bold';
+            labels = { ...
+                'CASE ID (OPTIONAL)', ...
+                'EYE LATERALITY', ...
+                'CAPTURE DATE / TIME (OPTIONAL)', ...
+                'CAMERA / DEVICE (OPTIONAL)'};
+            labelCols = {[1 2],3,4,[5 6]};
 
-            imageGrid = uigridlayout(app.ImagePanel,[2 3]);
-            imageGrid.RowHeight = {'1x','1x'};
-            imageGrid.ColumnWidth = {'1x','1x','1x'};
-            imageGrid.Padding = [8 8 8 8];
-            imageGrid.RowSpacing = 8;
-            imageGrid.ColumnSpacing = 8;
+            for n = 1:numel(labels)
+                x = uilabel(ig, ...
+                    'Text',labels{n}, ...
+                    'FontSize',10, ...
+                    'FontWeight','bold', ...
+                    'FontColor',app.Colors.muted, ...
+                    'VerticalAlignment','bottom');
+                x.Layout.Row = 2;
+                x.Layout.Column = labelCols{n};
+            end
 
-            app.OriginalAxes = app.makeAxes(imageGrid,'Original Image',1,1);
-            app.GradingAxes = app.makeAxes(imageGrid,'Image Used for Grading',1,2);
-            app.StructuresAxes = app.makeAxes(imageGrid,'Retinal Structures',1,3);
-            app.MicroaneurysmAxes = app.makeAxes(imageGrid,'Microaneurysm',2,1);
-            app.HemorrhageAxes = app.makeAxes(imageGrid,'Hemorrhage + Exudate',2,2);
-            app.GradCAMAxes = app.makeAxes(imageGrid,'Grad-CAM',2,3);
+            app.CaseIdField = uieditfield(ig,'text', ...
+                'ValueChangedFcn',@(~,~)app.updateCaseHeader());
+            app.CaseIdField.Layout.Row = 3;
+            app.CaseIdField.Layout.Column = [1 2];
 
-            % =========================================================
-            % RESULTS + LESION + STRUCTURE AREA
-            % =========================================================
-            lowerGrid = uigridlayout(app.MainGrid,[1 3]);
-            lowerGrid.ColumnWidth = {300,'1x',350};
-            lowerGrid.Padding = [0 0 0 0];
-            lowerGrid.ColumnSpacing = 10;
+            app.EyeDropDown = uidropdown(ig, ...
+                'Items',{'Eye: not specified','Right eye','Left eye'}, ...
+                'Value','Eye: not specified', ...
+                'ValueChangedFcn',@(~,~)app.updateCaseHeader());
+            app.EyeDropDown.Layout.Row = 3;
+            app.EyeDropDown.Layout.Column = 3;
 
-            % Results
-            app.ResultsPanel = uipanel(lowerGrid);
-            app.ResultsPanel.Title = 'Screening Results';
-            app.ResultsPanel.FontWeight = 'bold';
-            app.ResultsPanel.Layout.Row = 1;
-            app.ResultsPanel.Layout.Column = 1;
+            app.CaptureField = uieditfield(ig,'text');
+            app.CaptureField.Layout.Row = 3;
+            app.CaptureField.Layout.Column = 4;
 
-            rg = uigridlayout(app.ResultsPanel,[4 2]);
-            rg.RowHeight = {'1x','1x','1x','1x'};
-            rg.ColumnWidth = {135,'1x'};
-            rg.Padding = [12 10 12 10];
-            rg.RowSpacing = 8;
-            rg.ColumnSpacing = 8;
+            app.DeviceField = uieditfield(ig,'text');
+            app.DeviceField.Layout.Row = 3;
+            app.DeviceField.Layout.Column = [5 6];
 
-            lbl = uilabel(rg);
-            lbl.Text = 'DR Grade';
-            lbl.FontWeight = 'bold';
-            lbl.Layout.Row = 1;
-            lbl.Layout.Column = 1;
+            %% Clinical results
+            app.ResultPanel = uipanel(app.RootGrid, ...
+                'Title','CLINICAL RESULT  •  SCREENING DECISION SUPPORT', ...
+                'ForegroundColor',app.Colors.ink, ...
+                'BackgroundColor',app.Colors.surface, ...
+                'HighlightColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'FontWeight','bold');
 
-            app.GradeValue = uilabel(rg);
-            app.GradeValue.Text = '--';
-            app.GradeValue.FontSize = 18;
-            app.GradeValue.FontWeight = 'bold';
-            app.GradeValue.Layout.Row = 1;
-            app.GradeValue.Layout.Column = 2;
+            rg = uigridlayout(app.ResultPanel,[1 5]);
+            rg.ColumnWidth = {'1.2x','1x','1x','1x','1.55x'};
+            rg.Padding = [16 10 16 10];
+            rg.ColumnSpacing = 10;
+            rg.BackgroundColor = app.Colors.surface;
 
-            lbl = uilabel(rg);
-            lbl.Text = 'Confidence';
-            lbl.FontWeight = 'bold';
-            lbl.Layout.Row = 2;
-            lbl.Layout.Column = 1;
+            [~,app.GradeLabel] = app.resultMetric(rg,1,['' char(128269) ' DR SCREENING GRADE'],'—');
+            [~,app.ReferableLabel] = app.resultMetric(rg,2,['' char(9888) ' REFERABLE PROBABILITY'],'—');
+            [~,app.ConfidenceLabel] = app.resultMetric(rg,3,['' char(128202) ' AI CONFIDENCE'],'—');
+            [~,app.MacularLabel] = app.resultMetric(rg,4,['' char(128065) ' MACULAR SCREEN'],'—');
 
-            app.ConfidenceValue = uilabel(rg);
-            app.ConfidenceValue.Text = '--';
-            app.ConfidenceValue.FontSize = 14;
-            app.ConfidenceValue.Layout.Row = 2;
-            app.ConfidenceValue.Layout.Column = 2;
+            actionPanel = uipanel(rg, ...
+                'BorderType','line', ...
+                'BackgroundColor',app.Colors.surface, ...
+                'ForegroundColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'HighlightColor',app.Colors.border);
+            actionPanel.Layout.Column = 5;
 
-            lbl = uilabel(rg);
-            lbl.Text = 'Referable probability';
-            lbl.FontWeight = 'bold';
-            lbl.Layout.Row = 3;
-            lbl.Layout.Column = 1;
+            ag = uigridlayout(actionPanel,[4 1]);
+            ag.RowHeight = {18,34,20,'1x'};
+            ag.Padding = [12 8 12 8];
+            ag.RowSpacing = 3;
+            ag.BackgroundColor = app.Colors.surface;
 
-            app.ReferableValue = uilabel(rg);
-            app.ReferableValue.Text = '--';
-            app.ReferableValue.FontSize = 14;
-            app.ReferableValue.Layout.Row = 3;
-            app.ReferableValue.Layout.Column = 2;
+            uilabel(ag, ...
+                'Text','RECOMMENDED ACTION', ...
+                'FontSize',10, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.muted);
 
-            lbl = uilabel(rg);
-            lbl.Text = 'Decision';
-            lbl.FontWeight = 'bold';
-            lbl.Layout.Row = 4;
-            lbl.Layout.Column = 1;
+            app.ActionLabel = uilabel(ag, ...
+                'Text','Awaiting assessment', ...
+                'FontSize',17, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.ink, ...
+                'VerticalAlignment','center', ...
+                'WordWrap','on');
+            app.ActionLabel.Layout.Row = 2;
 
-            app.DecisionValue = uilabel(rg);
-            app.DecisionValue.Text = '--';
-            app.DecisionValue.FontSize = 13;
-            app.DecisionValue.FontWeight = 'bold';
-            app.DecisionValue.Layout.Row = 4;
-            app.DecisionValue.Layout.Column = 2;
+            app.ActionPriorityLabel = uilabel(ag, ...
+                'Text','Priority: not assessed', ...
+                'FontSize',11, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.muted, ...
+                'WordWrap','on');
+            app.ActionPriorityLabel.Layout.Row = 3;
 
-            % Lesions
-            app.LesionPanel = uipanel(lowerGrid);
-            app.LesionPanel.Title = 'Lesion Evidence';
-            app.LesionPanel.FontWeight = 'bold';
-            app.LesionPanel.Layout.Row = 1;
-            app.LesionPanel.Layout.Column = 2;
+            app.ActionRationaleLabel = uilabel(ag, ...
+                'Text','Quality and retinal evidence will be shown after assessment.', ...
+                'FontSize',10, ...
+                'FontColor',app.Colors.muted, ...
+                'VerticalAlignment','top', ...
+                'WordWrap','on');
+            app.ActionRationaleLabel.Layout.Row = 4;
 
-            app.LesionTable = uitable(app.LesionPanel);
-            app.LesionTable.Position = [8 8 500 112];
-            app.LesionTable.ColumnName = {'Finding','Status','Area (%)','Components'};
-            app.LesionTable.Data = cell(0,4);
+            %% Main content
+            app.ContentGrid = uigridlayout(app.RootGrid,[3 2]);
+            app.ContentGrid.RowHeight = {'1x','1x',180};
+            app.ContentGrid.ColumnWidth = {'2x',470};
+            app.ContentGrid.Padding = [0 0 0 0];
+            app.ContentGrid.RowSpacing = 10;
+            app.ContentGrid.ColumnSpacing = 10;
+            app.ContentGrid.BackgroundColor = app.Colors.page;
 
-            % Structures
-            app.StructurePanel = uipanel(lowerGrid);
-            app.StructurePanel.Title = 'Structure Analysis';
-            app.StructurePanel.FontWeight = 'bold';
-            app.StructurePanel.Layout.Row = 1;
-            app.StructurePanel.Layout.Column = 3;
+            %% Image evidence workspace
+            app.WorkspacePanel = uipanel(app.ContentGrid, ...
+                'Title','IMAGE EVIDENCE WORKSPACE', ...
+                'ForegroundColor',app.Colors.ink, ...
+                'BackgroundColor',app.Colors.surface, ...
+                'HighlightColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'FontWeight','bold');
+            app.WorkspacePanel.Layout.Row = [1 3];
+            app.WorkspacePanel.Layout.Column = 1;
 
-            sg = uigridlayout(app.StructurePanel,[4 2]);
-            sg.RowHeight = {'1x','1x','1x','1x'};
-            sg.ColumnWidth = {170,'1x'};
-            sg.Padding = [10 8 10 8];
+            wg = uigridlayout(app.WorkspacePanel,[2 2]);
+            wg.RowHeight = {'1x',58};
+            wg.ColumnWidth = {'1x',165};
+            wg.Padding = [14 12 14 12];
+            wg.RowSpacing = 8;
+            wg.ColumnSpacing = 10;
+            wg.BackgroundColor = app.Colors.surface;
 
-            lbl = uilabel(sg,'Text','Optic disc');
-            lbl.Layout.Row = 1; lbl.Layout.Column = 1;
-            app.OpticDiscLabel = uilabel(sg,'Text','--');
-            app.OpticDiscLabel.Layout.Row = 1; app.OpticDiscLabel.Layout.Column = 2;
+            app.MainAxes = uiaxes(wg);
+            app.MainAxes.Layout.Row = 1;
+            app.MainAxes.Layout.Column = 1;
+            app.MainAxes.Color = app.Colors.surface;
+            app.MainAxes.XColor = 'none';
+            app.MainAxes.YColor = 'none';
+            app.MainAxes.Box = 'off';
+            app.MainAxes.XTick = [];
+            app.MainAxes.YTick = [];
+            app.MainAxes.Title.Color = app.Colors.ink;
+            app.MainAxes.Title.FontWeight = 'bold';
+            axtoolbar(app.MainAxes,{'zoomin','zoomout','pan','restoreview'});
 
-            lbl = uilabel(sg,'Text','Fovea');
-            lbl.Layout.Row = 2; lbl.Layout.Column = 1;
-            app.FoveaLabel = uilabel(sg,'Text','--');
-            app.FoveaLabel.Layout.Row = 2; app.FoveaLabel.Layout.Column = 2;
+            rail = uipanel(wg, ...
+                'BorderType','none', ...
+                'BackgroundColor',app.Colors.surface);
+            rail.Layout.Row = 1;
+            rail.Layout.Column = 2;
 
-            lbl = uilabel(sg,'Text','Vessel density');
-            lbl.Layout.Row = 3; lbl.Layout.Column = 1;
-            app.VesselDensityLabel = uilabel(sg,'Text','--');
-            app.VesselDensityLabel.Layout.Row = 3; app.VesselDensityLabel.Layout.Column = 2;
+            vg = uigridlayout(rail,[7 1]);
+            vg.RowHeight = {18,34,34,34,34,34,34};
+            vg.Padding = [0 0 0 0];
+            vg.RowSpacing = 6;
+            vg.BackgroundColor = app.Colors.surface;
 
-            lbl = uilabel(sg,'Text','NV suspicious');
-            lbl.Layout.Row = 4; lbl.Layout.Column = 1;
-            app.NVLabel = uilabel(sg,'Text','--');
-            app.NVLabel.Layout.Row = 4; app.NVLabel.Layout.Column = 2;
+            app.ViewTitle = uilabel(vg, ...
+                'Text','IMAGE VIEW', ...
+                'FontSize',10, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.muted, ...
+                'HorizontalAlignment','center');
 
-            % =========================================================
-            % FOOTER
-            % =========================================================
-            app.FooterPanel = uipanel(app.MainGrid);
-            app.FooterPanel.BorderType = 'none';
+            names = {'Original','Grading image','Structure overlay','Lesion evidence','Grad-CAM','Color legend'};
+            keys = {'original','grading','structures','lesions','gradcam','legend'};
+            app.ViewButtons = cell(1,numel(names));
 
-            fg = uigridlayout(app.FooterPanel,[1 4]);
-            fg.ColumnWidth = {'1x',160,160,160};
-            fg.Padding = [0 5 0 5];
-            fg.ColumnSpacing = 10;
+            for k = 1:numel(names)
+                b = uibutton(vg, ...
+                    'Text',names{k}, ...
+                    'ButtonPushedFcn',@(~,~)app.setImageView(keys{k}));
+                b.Layout.Row = k + 1;
+                app.styleButton(b,'view');
+                app.ViewButtons{k} = b;
+            end
 
-            note = uilabel(fg);
-            note.Text = 'Clinical decision support prototype — not a substitute for ophthalmologist review.';
-            note.FontColor = [0.40 0.44 0.48];
-            note.Layout.Row = 1;
-            note.Layout.Column = 1;
+            controls = uigridlayout(wg,[2 4]);
+            controls.Layout.Row = 2;
+            controls.Layout.Column = [1 2];
+            controls.RowHeight = {26,24};
+            controls.ColumnWidth = {125,'1x',55,'1.35x'};
+            controls.Padding = [0 0 0 0];
+            controls.RowSpacing = 2;
+            controls.ColumnSpacing = 8;
+            controls.BackgroundColor = app.Colors.surface;
 
-            app.GeneratePDFButton = uibutton(fg,'push');
-            app.GeneratePDFButton.Text = 'Generate PDF';
-            app.GeneratePDFButton.ButtonPushedFcn = @(src,event)app.generatePDF();
-            app.GeneratePDFButton.Layout.Row = 1;
-            app.GeneratePDFButton.Layout.Column = 2;
+            uilabel(controls, ...
+                'Text','OVERLAY OPACITY', ...
+                'FontSize',10, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.muted, ...
+                'VerticalAlignment','center');
 
-            app.OpenPDFButton = uibutton(fg,'push');
-            app.OpenPDFButton.Text = 'Open PDF';
-            app.OpenPDFButton.ButtonPushedFcn = @(src,event)app.openPDF();
-            app.OpenPDFButton.Layout.Row = 1;
-            app.OpenPDFButton.Layout.Column = 3;
+            app.OverlaySlider = uislider(controls, ...
+                'Limits',[0.10 0.80], ...
+                'Value',0.42, ...
+                'ValueChangingFcn',@(~,~)app.refreshView(), ...
+                'ValueChangedFcn',@(~,~)app.refreshView());
 
-            app.ClearButton = uibutton(fg,'push');
-            app.ClearButton.Text = 'Clear / New Case';
-            app.ClearButton.ButtonPushedFcn = @(src,event)app.clearApp();
-            app.ClearButton.Layout.Row = 1;
-            app.ClearButton.Layout.Column = 4;
+            app.OverlayLabel = uilabel(controls, ...
+                'Text','42%', ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.ink, ...
+                'HorizontalAlignment','center');
 
-            app.setStatus('Ready');
+            zoomHelp = uilabel(controls, ...
+                'Text','Pan / zoom with viewer tools', ...
+                'FontSize',10, ...
+                'FontColor',app.Colors.muted, ...
+                'HorizontalAlignment','right', ...
+                'WordWrap','on');
+            zoomHelp.Layout.Column = 4;
+
+            app.LegendLabel = uilabel(controls, ...
+                'Text','Red = microaneurysm  •  Amber = hemorrhage  •  Green = exudate  •  Heatmap = model attention', ...
+                'FontSize',10, ...
+                'FontColor',app.Colors.muted, ...
+                'WordWrap','on');
+            app.LegendLabel.Layout.Row = 2;
+            app.LegendLabel.Layout.Column = [1 4];
+
+            %% Lesion evidence
+            app.EvidencePanel = uipanel(app.ContentGrid, ...
+                'Title','LESION EVIDENCE', ...
+                'ForegroundColor',app.Colors.ink, ...
+                'BackgroundColor',app.Colors.surface, ...
+                'HighlightColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'FontWeight','bold');
+            app.EvidencePanel.Layout.Row = [1 2];
+            app.EvidencePanel.Layout.Column = 2;
+
+            eg = uigridlayout(app.EvidencePanel,[2 1]);
+
+            eg.RowHeight = {220,42};
+            eg.Padding = [12 10 12 10];
+            eg.RowSpacing = 7;
+            eg.BackgroundColor = app.Colors.surface;
+
+            app.EvidenceTable = uitable(eg, ...
+                'ColumnName',{'Finding','Status','Regions','Area (%)','Confidence'}, ...
+                'Data',cell(0,5), ...
+                'ColumnWidth',{140,85,60,70,80}, ...
+                'RowStriping','on', ...
+                'FontSize',12, ...
+                'BackgroundColor',[app.Colors.surface; app.Colors.subtle], ...
+                'CellSelectionCallback',@(src,event)app.onEvidenceSelection(src,event));
+
+            % Make all lesion-evidence table text black.
+            evidenceTextStyle = uistyle('FontColor',[0 0 0]);
+            addStyle(app.EvidenceTable,evidenceTextStyle,'column',1:5);
+
+            app.EvidenceTable.Layout.Row = 1;
+            app.HighlightButton = uibutton(eg, ...
+                'Text','HIGHLIGHT SELECTED LESION', ...
+                'ButtonPushedFcn',@(~,~)app.highlightSelectedEvidence());
+            app.HighlightButton.Layout.Row = 2;
+            app.styleButton(app.HighlightButton,'secondary');
+            app.HighlightButton.Enable = 'off';
+
+            %% Anatomy + notes
+            app.AnatomyPanel = uipanel(app.ContentGrid, ...
+                'Title','ANATOMICAL CONTEXT & CLINICIAN NOTES', ...
+                'ForegroundColor',app.Colors.ink, ...
+                'BackgroundColor',app.Colors.surface, ...
+                'HighlightColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'FontWeight','bold');
+            app.AnatomyPanel.Layout.Row = 3;
+            app.AnatomyPanel.Layout.Column = 2;
+
+            ng = uigridlayout(app.AnatomyPanel,[2 2]);
+
+            % More room for technical details and scrolling when needed.
+            ng.RowHeight = {'1x',60};
+            ng.ColumnWidth = {'1x','1.1x'};
+            ng.Padding = [12 8 12 8];
+            ng.RowSpacing = 5;
+            ng.ColumnSpacing = 9;
+            ng.BackgroundColor = app.Colors.surface;
+
+            app.AnatomyLabel = uilabel(ng, ...
+                'Text','Optic disc, fovea and vessel context will appear after assessment.', ...
+                'WordWrap','on', ...
+                'FontColor',app.Colors.ink, ...
+                'FontSize',11, ...
+                'VerticalAlignment','top');
+            app.AnatomyLabel.Layout.Row = 1;
+            app.AnatomyLabel.Layout.Column = 1;
+
+            app.NotesArea = uitextarea(ng, ...
+                'Placeholder','Clinician notes (not used for AI inference)', ...
+                'BackgroundColor',app.Colors.surface, ...
+                'FontColor',app.Colors.ink);
+            app.NotesArea.Layout.Row = 1;
+            app.NotesArea.Layout.Column = 2;
+
+            app.DetailsButton = uibutton(ng, ...
+                'Text','SHOW TECHNICAL DETAILS', ...
+                'ButtonPushedFcn',@(~,~)app.toggleTechnicalDetails());
+            app.DetailsButton.Layout.Row = 2;
+            app.DetailsButton.Layout.Column = 1;
+            app.styleButton(app.DetailsButton,'secondary');
+
+            app.TechnicalArea = uilabel(ng, ...
+                'Text','Technical coordinates are hidden until requested.', ...
+                'WordWrap','on', ...
+                'FontSize',10, ...
+                'FontColor',app.Colors.muted, ...
+                'Visible','off');
+            app.TechnicalArea.Layout.Row = 2;
+            app.TechnicalArea.Layout.Column = 2;
+
+            %% Footer — all white
+            app.FooterPanel = uipanel(app.RootGrid, ...
+                'BorderType','line', ...
+                'BackgroundColor',app.Colors.surface, ...
+                'ForegroundColor',app.Colors.border, ...
+                'Scrollable','on', ...
+                'HighlightColor',app.Colors.border);
+
+            fg = uigridlayout(app.FooterPanel,[1 5]);
+            fg.ColumnWidth = {'1x','1.2x',150,125,110};
+            fg.Padding = [8 6 8 6];
+            fg.ColumnSpacing = 8;
+            fg.BackgroundColor = app.Colors.surface;
+
+            uilabel(fg, ...
+                'Text','AI-assisted screening decision support — clinician confirmation required.', ...
+                'FontWeight','bold', ...
+                'FontSize',11, ...
+                'FontColor',app.Colors.ink, ...
+                'VerticalAlignment','center', ...
+                'WordWrap','on');
+
+            app.ModelLabel = uilabel(fg, ...
+                'Text','Model: supplied ONNX • provenance unverified', ...
+                'FontSize',10, ...
+                'FontColor',app.Colors.muted, ...
+                'HorizontalAlignment','right', ...
+                'VerticalAlignment','center', ...
+                'WordWrap','on');
+            app.ModelLabel.Layout.Column = 2;
+
+            app.ReportButton = uibutton(fg, ...
+                'Text',['' char(128196) ' GENERATE REPORT'], ...
+                'ButtonPushedFcn',@(~,~)app.generateReport());
+            app.ReportButton.Layout.Column = 3;
+            app.styleButton(app.ReportButton,'secondary');
+
+            app.OpenReportButton = uibutton(fg, ...
+                'Text',['' char(128214) ' OPEN REPORT'], ...
+                'ButtonPushedFcn',@(~,~)app.openReport());
+            app.OpenReportButton.Layout.Column = 4;
+            app.styleButton(app.OpenReportButton,'secondary');
+
+            app.NewCaseButton = uibutton(fg, ...
+                'Text',['' char(10133) ' NEW CASE'], ...
+                'ButtonPushedFcn',@(~,~)app.confirmNewCase());
+            app.NewCaseButton.Layout.Column = 5;
+            app.styleButton(app.NewCaseButton,'secondary');
+
+            app.setStatus('READY FOR CASE INTAKE','ready');
         end
 
-        function ax = makeAxes(~,parent,titleText,row,col)
-            ax = uiaxes(parent);
-            ax.Layout.Row = row;
-            ax.Layout.Column = col;
-            ax.Title.String = titleText;
-            ax.XTick = [];
-            ax.YTick = [];
-            ax.Box = 'on';
-            ax.Toolbar.Visible = 'off';
-            ax.Color = [1 1 1];
+        function styleButton(app,button,kind)
+            button.FontWeight = 'bold';
+            button.FontSize = 11;
+
+            switch kind
+                case 'primary'
+                    button.BackgroundColor = app.Colors.blue;
+                    button.FontColor = [1 1 1];
+                case 'view'
+                    button.BackgroundColor = [0.94 0.97 1.00];
+                    button.FontColor = app.Colors.blueDark;
+                otherwise
+                    button.BackgroundColor = [0.90 0.94 0.98];
+                    button.FontColor = app.Colors.blueDark;
+            end
+        end
+
+        function [label,value] = resultMetric(app,parent,col,caption,initial)
+            p = uipanel(parent, ...
+                'BorderType','line', ...
+                'BackgroundColor',app.Colors.surface, ...
+                'ForegroundColor',app.Colors.border, ...
+                'HighlightColor',app.Colors.border);
+            p.Layout.Column = col;
+
+            g = uigridlayout(p,[2 1]);
+            g.RowHeight = {30,'1x'};
+            g.Padding = [12 8 12 8];
+            g.RowSpacing = 2;
+            g.BackgroundColor = app.Colors.surface;
+
+            label = uilabel(g, ...
+                'Text',caption, ...
+                'FontSize',10, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.muted, ...
+                'VerticalAlignment','top', ...
+                'WordWrap','on');
+
+            value = uilabel(g, ...
+                'Text',initial, ...
+                'FontSize',18, ...
+                'FontWeight','bold', ...
+                'FontColor',app.Colors.ink, ...
+                'VerticalAlignment','center', ...
+                'WordWrap','on');
+            value.Layout.Row = 2;
         end
 
         function selectImage(app)
-            [file,path] = uigetfile( ...
-            {'*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff','Fundus Images'}, ...
-            'Select a Fundus Image');
+            [file,path] = uigetfile({ ...
+                '*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff','Fundus images'}, ...
+                'Select fundus image');
 
             if isequal(file,0)
-                return;
+                return
             end
 
-            app.SelectedImageFile = string(fullfile(path,file));
-            app.SelectedImage = imread(app.SelectedImageFile);
+            try
+                app.SelectedImageFile = string(fullfile(path,file));
+                app.SelectedImage = imread(app.SelectedImageFile);
 
-            app.FileNameLabel.Text = file;
-            app.QualityLabel.Text = 'Quality: not checked';
+                % Clear previous assessment when a new image is selected.
+                app.LastResult = [];
 
-            imshow(app.SelectedImage,'Parent',app.OriginalAxes);
-            title(app.OriginalAxes,'Original Image');
+                % Reset previous clinical result values.
+                app.GradeLabel.Text = '—';
+                app.ReferableLabel.Text = '—';
+                app.ConfidenceLabel.Text = '—';
+                app.MacularLabel.Text = '—';
+                app.ActionLabel.Text = 'Awaiting assessment';
+                app.ActionPriorityLabel.Text = 'Priority: not assessed';
+                app.ActionRationaleLabel.Text = ...
+                    'Quality and retinal evidence will be shown after assessment.';
+                app.ActionLabel.FontColor = app.Colors.ink;
+                app.ActionPriorityLabel.FontColor = app.Colors.muted;
 
-            app.setStatus('Image selected. Ready to screen.');
+                % Reset evidence/anatomical information from previous case.
+                app.EvidenceTable.Data = cell(0,5);
+                app.HighlightButton.Enable = 'off';
+                app.SelectedEvidenceIndex = [];
+                app.AnatomyLabel.Text = ...
+                    'Optic disc, fovea and vessel context will appear after assessment.';
+                app.TechnicalArea.Visible = 'off';
+                app.DetailsButton.Text = 'SHOW TECHNICAL DETAILS';
+                app.ModelLabel.Text = ...
+                    'Model: supplied ONNX • provenance unverified';
+
+                app.ImageViews = struct('original',app.SelectedImage);
+                app.CurrentView = "original";
+                app.setImageView('original');
+
+                app.setStatus('IMAGE SELECTED — READY TO ASSESS','processing');
+                app.QualityLabel.Text = 'GRADEABILITY: PENDING';
+                app.QualityLabel.FontColor = app.Colors.amber;
+                app.updateCaseHeader();
+
+            catch ME
+                app.showEmptyState('Unable to read selected image. Choose a valid RGB or grayscale fundus image.');
+                app.setStatus('IMAGE LOAD FAILED','failed');
+                uialert(app.UIFigure,ME.message,'Image Load Failed');
+            end
         end
 
         function runScreening(app)
-            if strlength(app.SelectedImageFile) == 0 || ...
-                ~isfile(app.SelectedImageFile)
-
+            if strlength(app.SelectedImageFile) == 0
                 uialert(app.UIFigure, ...
-                'Please select a fundus image first.', ...
-                'No Image Selected');
-                return;
+                    'Select a fundus image before running assessment.', ...
+                    'No Image Selected');
+                return
             end
+
+            app.setControlsEnabled(false);
+            app.setStatus('ANALYSIS IN PROGRESS — PLEASE WAIT','processing');
+            app.showEmptyState('Running quality assessment, retinal analysis and explainability…');
+            drawnow;
+
+            cleanup = onCleanup(@()app.setControlsEnabled(true)); %#ok<NASGU>
 
             try
-                app.RunButton.Enable = 'off';
-                app.SelectImageButton.Enable = 'off';
-                drawnow;
-
-                rootDir = fileparts(mfilename('fullpath'));
-
-                addpath(rootDir);
-                addpath(fullfile(rootDir,'validation'));
-                addpath(fullfile(rootDir,'simulink'));
-
-                cfgFile = fullfile(rootDir,'prototypeConfig.json');
-                if ~isfile(cfgFile)
-                    error('prototypeConfig.json not found:\n%s',cfgFile);
-                end
-
-                cfg = jsondecode(fileread(cfgFile));
-                app.Config = cfg;
-
-                modelFile = fullfile(rootDir,cfg.classifierModel);
-                if ~isfile(modelFile)
-                    error('Classifier model missing:\n%s',modelFile);
-                end
-
-                app.setStatus('Loading DR model...');
-                app.Net = loadONNXModelCached(modelFile);
-
-                imageFile = char(app.SelectedImageFile);
-                original = imread(imageFile);
-                app.SelectedImage = original;
-
-                app.setStatus('Checking image quality...');
-                quality = checkImageQuality(original,cfg);
-                app.LastQuality = quality;
-
-                app.QualityLabel.Text = sprintf( ...
-                'Quality: %s | Score %.3f', ...
-                char(string(quality.status)),quality.score);
-
-                if quality.status == "REJECT"
-                    app.setStatus('Image rejected — recapture required.');
-
-                    uialert(app.UIFigure, ...
-                    sprintf(['Image quality rejected.\n\n%s\n\n' ...
-                    'Suggested action: refocus, center the retina, ' ...
-                    'improve illumination, or recapture.'], ...
-                    quality.message), ...
-                    'Image Quality Rejected');
-
-                    app.RunButton.Enable = 'on';
-                    app.SelectImageButton.Enable = 'on';
-                    return;
-                end
-
-                usedImage = original;
-
-                if quality.isBorderline
-                    app.setStatus('Enhancing borderline image...');
-                    usedImage = enhanceFundusImage(original);
-
-                    post = checkImageQuality(usedImage,cfg);
-                    quality.postEnhancement = post;
-                    app.LastQuality = quality;
-
-                    if post.status == "REJECT"
-                        uialert(app.UIFigure, ...
-                        sprintf('Image remained unacceptable after enhancement.\n\n%s', ...
-                        post.message), ...
-                        'Image Quality Rejected');
-
-                        app.RunButton.Enable = 'on';
-                        app.SelectImageButton.Enable = 'on';
-                        return;
-                    end
-                end
-
-                app.setStatus('Running DR classifier...');
-                result = screenFundusImage( ...
-                app.Net,usedImage,cfg);
-
-                lesionRoot = fullfile(rootDir,'models');
-                lesionCfg = cfg;
-
-                app.setStatus('Running lesion analysis...');
-
-                lesions.microaneurysm = runLesionModel( ...
-                fullfile(lesionRoot,'microaneurysm_model.onnx'), ...
-                original,lesionCfg,'microaneurysm');
-
-                lesions.hemorrhage = runLesionModel( ...
-                fullfile(lesionRoot,'hemorrhage_model.onnx'), ...
-                original,lesionCfg,'hemorrhage');
-
-                lesions.exudate = runLesionModel( ...
-                fullfile(lesionRoot,'exudate_model.onnx'), ...
-                original,lesionCfg,'exudate');
-
-                app.setStatus('Analyzing retinal structures...');
-
-                structures = segmentRetinalStructures( ...
-                original,quality);
-
-                app.setStatus('Generating Grad-CAM...');
-
-                cam = computeGradCAM( ...
-                app.Net,usedImage, ...
-                result.predictedGrade+1,cfg);
-
-                result.fusedReferableProbability = [];
-                result.fusedReferable = [];
-
-                if isfield(cfg,'fusion') && ...
-                    isfield(cfg.fusion,'enabled') && ...
-                    cfg.fusion.enabled && ...
-                    isfield(cfg.fusion,'modelFile') && ...
-                    isfile(fullfile(rootDir,cfg.fusion.modelFile))
-
-                    S = load(fullfile(rootDir,cfg.fusion.modelFile), ...
-                    'fusionModel');
-
-                    [fusedP,~] = fuseReferableEvidence( ...
-                    result.referableProbability, ...
-                    lesions,structures,S.fusionModel);
-
-                    result.fusedReferableProbability = fusedP;
-                    result.fusedReferable = ...
-                    fusedP >= cfg.fusion.threshold;
-                end
-
-                app.setStatus('Building annotated report...');
-
-                report = buildAnnotatedReport( ...
-                imageFile,original,usedImage,quality, ...
-                result,lesions,structures,cam,cfg);
-
-                result.lesionEvidence = lesions;
-                result.structures = structures;
-                result.gradcam = cam;
-                result.report = report;
-
+                result = screenFundusImage(app.SelectedImageFile);
                 app.LastResult = result;
-                app.LastLesions = lesions;
-                app.LastStructures = structures;
-                app.LastCAM = cam;
-                app.LastReport = report;
+                app.applyResult(result);
 
-                resultsDir = fullfile(rootDir,'results');
-                if ~isfolder(resultsDir)
-                    mkdir(resultsDir);
+                if result.status == "UNGRADABLE"
+                    app.setStatus('UNGRADABLE IMAGE — RECAPTURE REQUIRED','failed');
+                    app.showEmptyState(result.recaptureFeedback);
+                    uialert(app.UIFigure,result.recaptureFeedback,'Ungradable Image');
+                    return
                 end
 
-                save(fullfile(resultsDir, ...
-                [report.baseName '_screening_result.mat']), ...
-                'result','quality','report');
-
-                app.displayResults( ...
-                original,usedImage,result,lesions,structures,cam);
-
-                if isfield(report,'pdfFile') && ...
-                    ~isempty(report.pdfFile) && ...
-                    isfile(report.pdfFile)
-
-                    app.LastPDF = string(report.pdfFile);
-                    app.openPDF();
-                end
-
-                app.setStatus('Screening completed successfully.');
+                app.setStatus('ASSESSMENT READY FOR CLINICIAN REVIEW','ready');
 
             catch ME
-                app.setStatus('Screening failed.');
-
-                uialert(app.UIFigure, ...
-                sprintf('Screening failed:\n\n%s',ME.message), ...
-                'Screening Error');
-
-                fprintf(2,'%s\n',getReport(ME,'extended','hyperlinks','off'));
-
+                app.setStatus('ANALYSIS FAILED','failed');
+                app.showEmptyState('Analysis failed safely. Check the image and model availability, then try again.');
+                uialert(app.UIFigure,ME.message,'Analysis Failed');
             end
-
-            app.RunButton.Enable = 'on';
-            app.SelectImageButton.Enable = 'on';
         end
 
-        function displayResults(app,original,usedImage,result,lesions,structures,cam)
+        function applyResult(app,result)
+            q = result.quality;
+            app.QualityLabel.Text = sprintf( ...
+                'GRADEABILITY: %s  •  SCORE %.2f',char(q.status),q.score);
 
-            imshow(original,'Parent',app.OriginalAxes);
-            title(app.OriginalAxes,'Original Image');
-
-            imshow(usedImage,'Parent',app.GradingAxes);
-            title(app.GradingAxes,'Image Used for Grading');
-
-            % Structures
-            imshow(original,'Parent',app.StructuresAxes);
-            title(app.StructuresAxes,'Retinal Structures');
-            hold(app.StructuresAxes,'on');
-
-            if isfield(structures,'opticDiscCentroid') && ...
-                ~isempty(structures.opticDiscCentroid)
-
-                c = structures.opticDiscCentroid;
-                if numel(c) >= 2 && all(isfinite(c(1:2)))
-                    plot(app.StructuresAxes,c(1),c(2),'r+','LineWidth',2,'MarkerSize',12);
-                    text(app.StructuresAxes,c(1)+5,c(2),'Optic disc', ...
-                    'Color','r','FontWeight','bold');
-                end
+            if q.status == "ACCEPT"
+                app.QualityLabel.FontColor = app.Colors.green;
+            else
+                app.QualityLabel.FontColor = app.Colors.amber;
             end
 
-            if isfield(structures,'foveaCentroid') && ...
-                ~isempty(structures.foveaCentroid)
+            g = result.finalGrade;
+            app.GradeLabel.Text = sprintf('Level %d — %s',g.level,char(g.label));
 
-                c = structures.foveaCentroid;
-                if numel(c) >= 2 && all(isfinite(c(1:2)))
-                    plot(app.StructuresAxes,c(1),c(2),'g+','LineWidth',2,'MarkerSize',12);
-                    text(app.StructuresAxes,c(1)+5,c(2),'Fovea', ...
-                    'Color','g','FontWeight','bold');
-                end
-            end
-            hold(app.StructuresAxes,'off');
+            app.ReferableLabel.Text = sprintf( ...
+                '%.1f%%',100*result.referableProbability);
 
-            % Lesion overlays
-            app.showLesion(app.MicroaneurysmAxes,original, ...
-            lesions.microaneurysm,'Microaneurysm');
+            app.ConfidenceLabel.Text = sprintf( ...
+                '%.1f%%',100*result.confidence);
 
-            hold(app.HemorrhageAxes,'on');
-            imshow(original,'Parent',app.HemorrhageAxes);
-            title(app.HemorrhageAxes,'Hemorrhage + Exudate');
+            app.MacularLabel.Text = strrep( ...
+                char(result.macularAssessment.status),'_',' ');
 
-            app.showMaskOnAxes(app.HemorrhageAxes, ...
-            lesions.hemorrhage,'r');
-
-            app.showMaskOnAxes(app.HemorrhageAxes, ...
-            lesions.exudate,'y');
-
-            hold(app.HemorrhageAxes,'off');
-
-            % Grad-CAM
-            imshow(usedImage,'Parent',app.GradCAMAxes);
-            title(app.GradCAMAxes,'Grad-CAM');
-
-            if isfield(cam,'map') && ~isempty(cam.map)
-                hold(app.GradCAMAxes,'on');
-
-                cm = cam.map;
-                cm = mat2gray(cm);
-                cm = imresize(cm,[size(usedImage,1) size(usedImage,2)]);
-
-                h = imagesc(app.GradCAMAxes,cm);
-                h.AlphaData = 0.45;
-
-                colormap(app.GradCAMAxes,'jet');
-                colorbar(app.GradCAMAxes);
-
-                hold(app.GradCAMAxes,'off');
+            if result.referable
+                app.ActionLabel.Text = 'Refer to ophthalmology';
+                app.ActionPriorityLabel.Text = 'Priority: timely review';
+                app.ActionRationaleLabel.Text = ...
+                    'Referable screening evidence is present. Confirm and arrange eye-care review.';
+                app.ActionLabel.FontColor = app.Colors.red;
+                app.ActionPriorityLabel.FontColor = app.Colors.red;
+            else
+                app.ActionLabel.Text = 'Routine follow-up';
+                app.ActionPriorityLabel.Text = 'Priority: standard pathway';
+                app.ActionRationaleLabel.Text = ...
+                    'No referable screening threshold was reached. Confirm during clinician review.';
+                app.ActionLabel.FontColor = app.Colors.green;
+                app.ActionPriorityLabel.FontColor = app.Colors.green;
             end
 
-            % Result labels
-            if isfield(result,'predictedGrade')
-                app.GradeValue.Text = sprintf('%d',result.predictedGrade);
-            end
+            app.ImageViews = struct( ...
+                'original',app.SelectedImage, ...
+                'grading',result.usedImage, ...
+                'structures',result.structures, ...
+                'lesions',result.lesionEvidence, ...
+                'gradcam',result.gradcam);
 
-            if isfield(result,'confidence')
-                app.ConfidenceValue.Text = sprintf('%.2f%%', ...
-                100*result.confidence);
-            end
+            app.SelectedEvidenceIndex = [];
+            app.populateEvidence(result.lesionEvidence);
+            app.populateAnatomy(result);
+            app.setImageView('original');
 
-            if isfield(result,'referableProbability')
-                app.ReferableValue.Text = sprintf('%.2f%%', ...
-                100*result.referableProbability);
-            end
+            processedTime = datetime("now",'Format','yyyy-MM-dd HH:mm');
+            app.ModelLabel.Text = sprintf( ...
+                'Model: supplied ONNX • processed %s', ...
+                char(processedTime));
 
-            if isfield(result,'referable')
-                if result.referable
-                    app.DecisionValue.Text = 'REFER TO OPHTHALMOLOGIST';
+            app.updateCaseHeader();
+        end
+
+        function setImageView(app,key)
+            app.CurrentView = string(key);
+            opacity = app.OverlaySlider.Value;
+
+            keys = {'original','grading','structures','lesions','gradcam','legend'};
+
+            for k = 1:numel(app.ViewButtons)
+                if string(keys{k}) == app.CurrentView
+                    app.ViewButtons{k}.BackgroundColor = app.Colors.blue;
+                    app.ViewButtons{k}.FontColor = [1 1 1];
                 else
-                    app.DecisionValue.Text = 'ROUTINE / FOLLOW-UP';
+                    app.ViewButtons{k}.BackgroundColor = [0.94 0.97 1.00];
+                    app.ViewButtons{k}.FontColor = app.Colors.blueDark;
                 end
             end
 
-            % Lesion table
-            app.LesionTable.Data = app.makeLesionTable(lesions);
+            cla(app.MainAxes);
+            app.MainAxes.Color = app.Colors.surface;
 
-            % Structure information
-            app.OpticDiscLabel.Text = app.centroidText( ...
-            structures,'opticDiscCentroid');
-
-            app.FoveaLabel.Text = app.centroidText( ...
-            structures,'foveaCentroid');
-
-            if isfield(structures,'vesselDensity')
-                app.VesselDensityLabel.Text = sprintf('%.3f', ...
-                structures.vesselDensity);
-            else
-                app.VesselDensityLabel.Text = '--';
+            if ~isfield(app.ImageViews,'original')
+                app.showEmptyState('No retinal image loaded.');
+                return
             end
 
-            if isfield(structures,'neovascularizationSuspicious')
-                app.NVLabel.Text = app.boolText( ...
-                structures.neovascularizationSuspicious);
-            else
-                app.NVLabel.Text = '--';
+            original = app.ImageViews.original;
+
+            if string(key) == "legend"
+                axis(app.MainAxes,'off');
+
+                text(app.MainAxes,0.07,0.83,'COLOR LEGEND', ...
+                    'Units','normalized', ...
+                    'Color',app.Colors.ink, ...
+                    'FontWeight','bold', ...
+                    'FontSize',16);
+
+                text(app.MainAxes,0.07,0.63,'Red — microaneurysm evidence', ...
+                    'Units','normalized', ...
+                    'Color',app.Colors.red, ...
+                    'FontSize',13);
+
+                text(app.MainAxes,0.07,0.46,'Amber — hemorrhage evidence', ...
+                    'Units','normalized', ...
+                    'Color',app.Colors.amber, ...
+                    'FontSize',13);
+
+                text(app.MainAxes,0.07,0.29,'Green — exudate evidence', ...
+                    'Units','normalized', ...
+                    'Color',app.Colors.green, ...
+                    'FontSize',13);
+
+                text(app.MainAxes,0.07,0.12, ...
+                    'Heatmap — model attention; it is not a diagnosis', ...
+                    'Units','normalized', ...
+                    'Color',app.Colors.ink, ...
+                    'FontSize',12);
+
+                app.ViewTitle.Text = 'COLOR LEGEND';
+                return
+            end
+
+            imshow(original,'Parent',app.MainAxes);
+            hold(app.MainAxes,'on');
+
+            switch string(key)
+
+                case "grading"
+                    if isfield(app.ImageViews,'grading')
+                        imshow(app.ImageViews.grading,'Parent',app.MainAxes);
+                    end
+                    title(app.MainAxes,{'IMAGE USED FOR GRADING',''}, ...
+                        'Color',app.Colors.ink);
+
+                case "structures"
+                    if isfield(app.ImageViews,'structures')
+                        s = app.ImageViews.structures;
+
+                        if isfield(s,'vesselMask') && ~isempty(s.vesselMask)
+                            % Draw vessels as transparent contour lines on the
+                            % original image. No dark canvas is introduced.
+                            boundaries = bwboundaries(logical(s.vesselMask));
+                            for b = 1:numel(boundaries)
+                                xy = boundaries{b};
+                                if size(xy,1) > 10
+                                    plot(app.MainAxes,xy(:,2),xy(:,1), ...
+                                        'Color',[0.12 0.52 0.72], ...
+                                        'LineWidth',0.8, ...
+                                        'LineStyle','-');
+                                end
+                            end
+                        end
+
+                        if isfield(s,'opticDiscCentroid') && all(isfinite(s.opticDiscCentroid))
+                            plot(app.MainAxes, ...
+                                s.opticDiscCentroid(1), ...
+                                s.opticDiscCentroid(2), ...
+                                'o','Color',[0.10 0.55 0.78], ...
+                                'LineWidth',2,'MarkerSize',12);
+                        end
+
+                        if isfield(s,'foveaCentroid') && all(isfinite(s.foveaCentroid))
+                            plot(app.MainAxes, ...
+                                s.foveaCentroid(1), ...
+                                s.foveaCentroid(2), ...
+                                '+','Color',app.Colors.amber, ...
+                                'LineWidth',2,'MarkerSize',14);
+                        end
+                    end
+
+                    title(app.MainAxes, ...
+                        {'STRUCTURE OVERLAY','VESSELS / DISC / FOVEA'}, ...
+                        'Color',app.Colors.ink);
+
+                case "lesions"
+                    if isfield(app.ImageViews,'lesions')
+                        app.drawLesions(app.ImageViews.lesions,opacity);
+                    end
+
+                    title(app.MainAxes, ...
+                        {'LESION EVIDENCE','MICROANEURYSM • HEMORRHAGE • EXUDATE'}, ...
+                        'Color',app.Colors.ink);
+
+                case "gradcam"
+                    if isfield(app.ImageViews,'gradcam') && ...
+                            isfield(app.ImageViews.gradcam,'success') && ...
+                            app.ImageViews.gradcam.success
+
+                        % Render Grad-CAM with a transparent alpha layer.
+                        h = imagesc(app.MainAxes,app.ImageViews.gradcam.map);
+                        h.AlphaData = 0.75 * opacity;
+                        colormap(app.MainAxes,'hot');
+
+                    else
+                        text(app.MainAxes,0.5,0.5, ...
+                            'Grad-CAM unavailable for this imported model.', ...
+                            'Units','normalized', ...
+                            'Color',app.Colors.ink, ...
+                            'HorizontalAlignment','center', ...
+                            'FontSize',12);
+                    end
+
+                    title(app.MainAxes, ...
+                        {'GRAD-CAM ATTENTION MAP','SUPPORTING CONTEXT ONLY'}, ...
+                        'Color',app.Colors.ink);
+
+                otherwise
+                    title(app.MainAxes,{'ORIGINAL FUNDUS IMAGE',''}, ...
+                        'Color',app.Colors.ink);
+            end
+
+            axis(app.MainAxes,'image');
+            app.MainAxes.XTick = [];
+            app.MainAxes.YTick = [];
+            hold(app.MainAxes,'off');
+
+            app.ViewTitle.Text = upper(strrep(char(key),'_',' '));
+        end
+
+        function drawLesions(app,L,opacity)
+            % Draw all evidence lightly, then selected evidence strongly.
+            specs = { ...
+                'microaneurysm',app.Colors.red; ...
+                'hemorrhage',app.Colors.amber; ...
+                'exudate',app.Colors.green};
+
+            for k = 1:size(specs,1)
+                field = specs{k,1};
+
+                if ~isfield(L,field)
+                    continue
+                end
+
+                x = L.(field);
+
+                if ~isfield(x,'mask') || isempty(x.mask)
+                    continue
+                end
+
+                mask = logical(x.mask);
+
+                % Convert mask to full original-image dimensions.
+                mask = imresize(mask, ...
+                    [size(app.ImageViews.original,1), ...
+                     size(app.ImageViews.original,2)], ...
+                    'nearest');
+
+                alphaValue = max(0.20,0.45 * opacity);
+                if ~isempty(app.SelectedEvidenceIndex) && ...
+                        app.SelectedEvidenceIndex == k
+                    alphaValue = min(1.0,0.95 * opacity + 0.20);
+                end
+
+                % Filled mask on a transparent layer.
+                rgb = zeros([size(mask,1),size(mask,2),3],'uint8');
+                rgb(:,:,1) = uint8(255 * specs{k,2}(1));
+                rgb(:,:,2) = uint8(255 * specs{k,2}(2));
+                rgb(:,:,3) = uint8(255 * specs{k,2}(3));
+
+                h = imshow(rgb,'Parent',app.MainAxes);
+                h.AlphaData = alphaValue * double(mask);
+
+                % Strong outline for selected evidence.
+                if ~isempty(app.SelectedEvidenceIndex) && ...
+                        app.SelectedEvidenceIndex == k
+
+                    boundaries = bwboundaries(mask);
+
+                    for b = 1:numel(boundaries)
+                        xy = boundaries{b};
+                        if size(xy,1) > 4
+                            plot(app.MainAxes,xy(:,2),xy(:,1), ...
+                                'Color',specs{k,2}, ...
+                                'LineWidth',2.2);
+                        end
+                    end
+                end
             end
         end
 
-        function showLesion(app,ax,original,lesion,titleText)
-            imshow(original,'Parent',ax);
-            title(ax,titleText);
-
-            hold(ax,'on');
-            app.showMaskOnAxes(ax,lesion,'r');
-            hold(ax,'off');
-        end
-
-        function showMaskOnAxes(~,ax,lesion,displayColor)
-            if ~isstruct(lesion)
-                return;
-            end
-
-            mask = [];
-
-            if isfield(lesion,'mask')
-                mask = lesion.mask;
-            elseif isfield(lesion,'binaryMask')
-                mask = lesion.binaryMask;
-            end
-
-            if isempty(mask)
-                return;
-            end
-
-            mask = logical(mask);
-            if ~isequal(size(mask),[ax.Position(4) ax.Position(3)])
-                % Overlay dimensions are determined from the displayed
-                % image rather than axes pixels below.
-            end
-
-            h = imagesc(ax,mask);
-            h.AlphaData = 0.28*double(mask);
-
-            if strcmp(displayColor,'r')
-                cmap = [1 0 0];
-            elseif strcmp(displayColor,'y')
-                cmap = [1 1 0];
-            else
-                cmap = [0 1 0];
-            end
-
-            colormap(ax,[0 0 0;cmap]);
-            h.CDataMapping = 'direct';
-            h.CData = double(mask)+1;
-        end
-
-        function data = makeLesionTable(app,lesions)
-            names = {'Microaneurysm';'Hemorrhage';'Exudate'};
+        function populateEvidence(app,L)
             fields = {'microaneurysm','hemorrhage','exudate'};
-
-            data = cell(3,4);
+            labels = {'Microaneurysm','Hemorrhage','Exudate'};
+            rows = cell(3,5);
 
             for k = 1:3
-                L = lesions.(fields{k});
+                x = L.(fields{k});
 
-                data{k,1} = names{k};
-
-                if isfield(L,'present')
-                    data{k,2} = app.boolText(L.present);
-                else
-                    data{k,2} = '--';
+                confidence = NaN;
+                if isfield(x,'probability') && ~isempty(x.probability)
+                    confidence = max(x.probability(:));
                 end
 
-                if isfield(L,'areaPercent')
-                    data{k,3} = sprintf('%.3f',L.areaPercent);
-                else
-                    data{k,3} = '--';
+                regions = 0;
+                if isfield(x,'subpixelCentroids') && ~isempty(x.subpixelCentroids)
+                    regions = size(x.subpixelCentroids,1);
                 end
 
-                if isfield(L,'subpixelCentroids') && ...
-                    ~isempty(L.subpixelCentroids)
-
-                    c = L.subpixelCentroids;
-
-                    if isvector(c)
-                        n = 1;
-                    else
-                        n = size(c,1);
-                    end
-
-                    data{k,4} = n;
-                else
-                    data{k,4} = 0;
+                areaPercent = NaN;
+                if isfield(x,'areaPercent') && ~isempty(x.areaPercent)
+                    areaPercent = x.areaPercent;
                 end
+
+                isPresent = false;
+                if isfield(x,'present')
+                    isPresent = logical(x.present);
+                end
+
+                rows(k,:) = { ...
+                    labels{k}, ...
+                    ternaryText(isPresent,'Detected','Not detected'), ...
+                    regions, ...
+                    sprintf('%.3f',areaPercent), ...
+                    formatPercent(confidence)};
+            end
+
+            app.EvidenceTable.Data = rows;
+            app.SelectedEvidenceIndex = [];
+            app.HighlightButton.Enable = 'off';
+        end
+
+        function populateAnatomy(app,result)
+            % Populate the anatomical context panel after a successful assessment.
+            if ~isfield(result,'structures') || isempty(result.structures)
+                app.AnatomyLabel.Text = ...
+                    'Anatomical context is unavailable for this assessment.';
+                app.TechnicalArea.Text = ...
+                    'Technical coordinates are unavailable.';
+                return
+            end
+
+            s = result.structures;
+
+            vesselDensityText = '—';
+            if isfield(s,'vesselDensity') && ~isempty(s.vesselDensity)
+                vesselDensityText = sprintf('%.3f',s.vesselDensity);
+            end
+
+            neovascularizationText = 'Not available';
+            if isfield(s,'neovascularizationStatus') && ...
+                    ~isempty(s.neovascularizationStatus)
+                neovascularizationText = strrep( ...
+                    char(s.neovascularizationStatus),'_',' ');
+            end
+
+            macularText = 'Not available';
+            if isfield(result,'macularAssessment') && ...
+                    isfield(result.macularAssessment,'status') && ...
+                    ~isempty(result.macularAssessment.status)
+                macularText = strrep( ...
+                    char(result.macularAssessment.status),'_',' ');
+            end
+
+            app.AnatomyLabel.Text = sprintf( ...
+                'Vessel density: %s\nNeovascularization screening: %s\nMacular context: %s', ...
+                vesselDensityText, ...
+                neovascularizationText, ...
+                macularText);
+
+            discText = 'not available';
+            if isfield(s,'opticDiscCentroid') && ...
+                    numel(s.opticDiscCentroid) >= 2 && ...
+                    all(isfinite(s.opticDiscCentroid(1:2)))
+                discText = sprintf('(%.1f, %.1f)', ...
+                    s.opticDiscCentroid(1),s.opticDiscCentroid(2));
+            end
+
+            foveaText = 'not available';
+            if isfield(s,'foveaCentroid') && ...
+                    numel(s.foveaCentroid) >= 2 && ...
+                    all(isfinite(s.foveaCentroid(1:2)))
+                foveaText = sprintf('(%.1f, %.1f)', ...
+                    s.foveaCentroid(1),s.foveaCentroid(2));
+            end
+
+            noteText = '';
+            if isfield(s,'neovascularizationNote') && ...
+                    ~isempty(s.neovascularizationNote)
+                noteText = char(s.neovascularizationNote);
+            end
+
+            app.TechnicalArea.Text = sprintf( ...
+                'Optic disc: %s  •  Fovea: %s\n%s', ...
+                discText, ...
+                foveaText, ...
+                noteText);
+        end
+
+        function onEvidenceSelection(app,src,event)
+            if isempty(event.Indices)
+                app.SelectedEvidenceIndex = [];
+                app.HighlightButton.Enable = 'off';
+                return
+            end
+
+            row = event.Indices(1);
+
+            if row >= 1 && row <= size(src.Data,1)
+                app.SelectedEvidenceIndex = row;
+                app.HighlightButton.Enable = 'on';
+
+                % Immediately show the selected evidence.
+                app.setImageView('lesions');
             end
         end
 
-        function txt = centroidText(~,S,field)
-            if ~isfield(S,field) || isempty(S.(field))
-                txt = '--';
-                return;
+        function highlightSelectedEvidence(app)
+            if isempty(app.SelectedEvidenceIndex)
+                uialert(app.UIFigure, ...
+                    'Select a lesion row first.', ...
+                    'No Lesion Selected');
+                return
             end
 
-            c = S.(field);
+            app.setImageView('lesions');
+        end
 
-            if numel(c) < 2 || any(~isfinite(c(1:2)))
-                txt = '--';
+        function refreshView(app)
+            app.OverlayLabel.Text = sprintf( ...
+                '%.0f%%',100*app.OverlaySlider.Value);
+            app.setImageView(app.CurrentView);
+        end
+
+        function toggleTechnicalDetails(app)
+            if strcmp(app.TechnicalArea.Visible,'on')
+                app.TechnicalArea.Visible = 'off';
+                app.DetailsButton.Text = 'SHOW TECHNICAL DETAILS';
             else
-                txt = sprintf('(%.1f, %.1f)',c(1),c(2));
+                app.TechnicalArea.Visible = 'on';
+                app.DetailsButton.Text = 'HIDE TECHNICAL DETAILS';
             end
         end
 
-        function txt = boolText(~,x)
-            if islogical(x) || isnumeric(x)
-                if x
-                    txt = 'YES';
-                else
-                    txt = 'NO';
-                end
+        function showEmptyState(app,message)
+            cla(app.MainAxes);
+            app.MainAxes.Color = app.Colors.surface;
+            axis(app.MainAxes,'off');
+
+            text(app.MainAxes,0.5,0.5,message, ...
+                'Units','normalized', ...
+                'HorizontalAlignment','center', ...
+                'VerticalAlignment','middle', ...
+                'Color',app.Colors.ink, ...
+                'FontSize',14, ...
+                'FontWeight','bold', ...
+                'Interpreter','none');
+            app.ViewTitle.Text = 'ASSESSMENT WORKSPACE';
+        end
+
+        function setControlsEnabled(app,value)
+            state = ternaryText(value,'on','off');
+            app.SelectImageButton.Enable = state;
+            app.RunButton.Enable = state;
+        end
+
+        function setStatus(app,message,kind)
+            app.StatusLabel.Text = message;
+
+            switch lower(kind)
+                case 'failed'
+                    c = app.Colors.red;
+                case 'processing'
+                    c = app.Colors.amber;
+                otherwise
+                    c = app.Colors.green;
+            end
+
+            app.StatusLamp.Color = c;
+            app.StatusLabel.FontColor = app.Colors.ink;
+        end
+
+        function updateCaseHeader(app)
+            caseId = string(app.CaseIdField.Value);
+            if strlength(caseId) == 0
+                caseId = "—";
+            end
+
+            eye = erase(string(app.EyeDropDown.Value),'Eye: ');
+            review = erase(string(app.ReviewerDropDown.Value),'Reviewer: ');
+
+            app.CaseHeaderLabel.Text = ...
+                "CASE: " + caseId + ...
+                "  |  EYE: " + eye + ...
+                "  |  REVIEW: " + upper(review);
+        end
+
+        function generateReport(app)
+            if isempty(app.LastResult)
+                uialert(app.UIFigure, ...
+                    'Run an assessment before generating a report.', ...
+                    'No Assessment');
+                return
+            end
+
+            if isfield(app.LastResult,'report')
+                app.openReport();
             else
-                txt = char(string(x));
+                uialert(app.UIFigure, ...
+                    'No report is available for this result.', ...
+                    'Report Unavailable');
             end
         end
 
-        function generatePDF(app)
-            if isempty(app.LastReport) || ~isstruct(app.LastReport)
-                uialert(app.UIFigure, ...
-                'Run screening before generating a PDF.', ...
-                'No Screening Result');
-                return;
-            end
-
-            try
-                if isfield(app.LastReport,'pdfFile') && ...
-                    isfile(app.LastReport.pdfFile)
-
-                    app.LastPDF = string(app.LastReport.pdfFile);
-                    app.openPDF();
-                    return;
-                end
+        function openReport(app)
+            if isempty(app.LastResult) || ...
+                    ~isfield(app.LastResult,'report') || ...
+                    ~isfile(app.LastResult.report.pdfFile)
 
                 uialert(app.UIFigure, ...
-                'The screening report does not contain a PDF file.', ...
-                'PDF Not Available');
-
-            catch ME
-                uialert(app.UIFigure,ME.message,'PDF Error');
+                    'No report is available yet.', ...
+                    'Report Unavailable');
+                return
             end
-        end
-
-        function openPDF(app)
-            if strlength(app.LastPDF) == 0
-                if ~isempty(app.LastReport) && ...
-                    isstruct(app.LastReport) && ...
-                    isfield(app.LastReport,'pdfFile')
-
-                    app.LastPDF = string(app.LastReport.pdfFile);
-                end
-            end
-
-            if strlength(app.LastPDF) == 0 || ~isfile(app.LastPDF)
-                uialert(app.UIFigure, ...
-                'No screening PDF is available yet.', ...
-                'PDF Not Available');
-                return;
-            end
-
-            pdfFile = char(app.LastPDF);
 
             if ispc
-                winopen(pdfFile);
-            elseif ismac
-                system(['open "' pdfFile '"']);
+                winopen(app.LastResult.report.pdfFile);
             else
-                system(['xdg-open "' pdfFile '"']);
+                open(app.LastResult.report.pdfFile);
             end
         end
 
-        function clearApp(app)
+        function confirmNewCase(app)
+            if isempty(app.LastResult) && ...
+                    strlength(app.SelectedImageFile) == 0
+                app.resetCase();
+                return
+            end
+
+            uiconfirm(app.UIFigure, ...
+                'Start a new case? Unsaved clinician notes will be discarded.', ...
+                'New case', ...
+                'Options',{'Cancel','Start new case'}, ...
+                'DefaultOption',1, ...
+                'CancelOption',1, ...
+                'CloseFcn',@(~,e)app.handleNewCaseChoice(e.SelectedOption));
+        end
+
+        function handleNewCaseChoice(app,choice)
+            if string(choice) == "Start new case"
+                app.resetCase();
+            end
+        end
+
+        function resetCase(app)
             app.SelectedImageFile = "";
             app.SelectedImage = [];
             app.LastResult = [];
-            app.LastQuality = [];
-            app.LastLesions = [];
-            app.LastStructures = [];
-            app.LastCAM = [];
-            app.LastReport = [];
-            app.LastPDF = "";
+            app.ImageViews = struct();
+            app.SelectedEvidenceIndex = [];
 
-            app.FileNameLabel.Text = 'No image selected';
-            app.QualityLabel.Text = 'Quality: --';
+            app.CaseIdField.Value = '';
+            app.EyeDropDown.Value = 'Eye: not specified';
+            app.CaptureField.Value = '';
+            app.DeviceField.Value = '';
+            app.ReviewerDropDown.Value = 'Reviewer: pending';
+            app.NotesArea.Value = '';
 
-            app.GradeValue.Text = '--';
-            app.ConfidenceValue.Text = '--';
-            app.ReferableValue.Text = '--';
-            app.DecisionValue.Text = '--';
+            app.QualityLabel.Text = 'GRADEABILITY: NOT ASSESSED';
+            app.QualityLabel.FontColor = app.Colors.muted;
 
-            app.OpticDiscLabel.Text = '--';
-            app.FoveaLabel.Text = '--';
-            app.VesselDensityLabel.Text = '--';
-            app.NVLabel.Text = '--';
+            app.GradeLabel.Text = '—';
+            app.ReferableLabel.Text = '—';
+            app.ConfidenceLabel.Text = '—';
+            app.MacularLabel.Text = '—';
 
-            app.LesionTable.Data = cell(0,4);
+            app.ActionLabel.Text = 'Awaiting assessment';
+            app.ActionPriorityLabel.Text = 'Priority: not assessed';
+            app.ActionRationaleLabel.Text = ...
+                'Quality and retinal evidence will be shown after assessment.';
+            app.ActionLabel.FontColor = app.Colors.ink;
+            app.ActionPriorityLabel.FontColor = app.Colors.muted;
 
-            cla(app.OriginalAxes);
-            cla(app.GradingAxes);
-            cla(app.StructuresAxes);
-            cla(app.MicroaneurysmAxes);
-            cla(app.HemorrhageAxes);
-            cla(app.GradCAMAxes);
+            app.EvidenceTable.Data = cell(0,5);
+            app.HighlightButton.Enable = 'off';
 
-            title(app.OriginalAxes,'Original Image');
-            title(app.GradingAxes,'Image Used for Grading');
-            title(app.StructuresAxes,'Retinal Structures');
-            title(app.MicroaneurysmAxes,'Microaneurysm');
-            title(app.HemorrhageAxes,'Hemorrhage + Exudate');
-            title(app.GradCAMAxes,'Grad-CAM');
+            app.AnatomyLabel.Text = ...
+                'Optic disc, fovea and vessel context will appear after assessment.';
 
-            app.setStatus('Ready for new case.');
+            app.TechnicalArea.Visible = 'off';
+            app.DetailsButton.Text = 'SHOW TECHNICAL DETAILS';
+
+            app.ModelLabel.Text = ...
+                'Model: supplied ONNX • provenance unverified';
+
+            app.updateCaseHeader();
+            app.setStatus('READY FOR CASE INTAKE','ready');
+            app.showEmptyState( ...
+                'Select a fundus image to begin a clinician-reviewed assessment.');
         end
 
-        function setStatus(app,msg)
+        function adaptLayout(app)
             if isempty(app.UIFigure) || ~isvalid(app.UIFigure)
-                return;
+                return
             end
 
-            app.StatusLabel.Text = msg;
+            width = app.UIFigure.Position(3);
 
-            if contains(lower(msg),'failed') || ...
-                contains(lower(msg),'rejected')
+            if width >= 1400
+                app.RootGrid.RowHeight = {66,154,158,'1x',62};
+                app.ContentGrid.ColumnWidth = {'2x',470};
+                app.ContentGrid.RowHeight = {'1x','1x',180};
 
-                app.StatusLamp.Color = [0.85 0.15 0.15];
+                app.WorkspacePanel.Layout.Row = [1 3];
+                app.WorkspacePanel.Layout.Column = 1;
 
-            elseif contains(lower(msg),'completed') || ...
-                contains(lower(msg),'ready')
+                app.EvidencePanel.Layout.Row = [1 2];
+                app.EvidencePanel.Layout.Column = 2;
 
-                app.StatusLamp.Color = [0.15 0.65 0.25];
+                app.AnatomyPanel.Layout.Row = 3;
+                app.AnatomyPanel.Layout.Column = 2;
+
+            elseif width >= 1180
+                app.RootGrid.RowHeight = {70,165,170,'1x',64};
+                app.ContentGrid.ColumnWidth = {'1.75x',440};
+                app.ContentGrid.RowHeight = {'1x','1x',190};
+
+                app.WorkspacePanel.Layout.Row = [1 3];
+                app.WorkspacePanel.Layout.Column = 1;
+
+                app.EvidencePanel.Layout.Row = [1 2];
+                app.EvidencePanel.Layout.Column = 2;
+
+                app.AnatomyPanel.Layout.Row = 3;
+                app.AnatomyPanel.Layout.Column = 2;
+
+            elseif width >= 900
+                app.RootGrid.RowHeight = {72,184,180,'1x',64};
+                app.ContentGrid.ColumnWidth = {'1x','1x'};
+                app.ContentGrid.RowHeight = {'1.25x','1x','0.9x'};
+
+                app.WorkspacePanel.Layout.Row = 1;
+                app.WorkspacePanel.Layout.Column = [1 2];
+
+                app.EvidencePanel.Layout.Row = 2;
+                app.EvidencePanel.Layout.Column = [1 2];
+
+                app.AnatomyPanel.Layout.Row = 3;
+                app.AnatomyPanel.Layout.Column = [1 2];
 
             else
-                app.StatusLamp.Color = [0.95 0.65 0.10];
-            end
+                app.RootGrid.RowHeight = {82,220,190,'1x',74};
+                app.ContentGrid.ColumnWidth = {'1x', '1x'};
+                app.ContentGrid.RowHeight = {'1.25x','0.9x','1.0x'};
 
-            drawnow;
+                app.WorkspacePanel.Layout.Row = 1;
+                app.WorkspacePanel.Layout.Column = 1;
+
+                app.EvidencePanel.Layout.Row = 2;
+                app.EvidencePanel.Layout.Column = 1;
+
+                app.AnatomyPanel.Layout.Row = 3;
+                app.AnatomyPanel.Layout.Column = 1;
+            end
         end
 
         function delete(app)
@@ -952,4 +1361,20 @@ classdef DRScreeningApp < handle
             end
         end
     end
+end
+
+function out = ternaryText(condition,yes,no)
+if condition
+    out = yes;
+else
+    out = no;
+end
+end
+
+function out = formatPercent(value)
+if isnan(value)
+    out = '—';
+else
+    out = sprintf('%.1f%%',100*value);
+end
 end

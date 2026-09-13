@@ -7,6 +7,7 @@ function sim=simulateScreeningCapacity(cfg,varargin)
     addParameter(p,"OperatingDays",cfg.simulation.operatingDays);
     addParameter(p,"HoursPerDay",cfg.simulation.hoursPerDay);
     addParameter(p,"CaptureStations",ceil(1/cfg.simulation.captureMinPerPatient));
+    addParameter(p,"CaptureMinPerPatient",cfg.simulation.captureMinPerPatient);
     addParameter(p,"Processors",cfg.simulation.processors);
     addParameter(p,"Reviewers",cfg.simulation.reviewers);
     addParameter(p,"ProcessingSec",cfg.simulation.processingSecPerImage);
@@ -20,7 +21,7 @@ function sim=simulateScreeningCapacity(cfg,varargin)
     minutes=1:nMinutes;
     arrivalRate=double(P.AnnualPatients)/nMinutes;
     arrivals=poissrnd(arrivalRate,size(minutes));
-    captureCap=P.CaptureStations*(60/max(P.captureMinPerPatient,eps));
+    captureCap=P.CaptureStations*(60/max(P.CaptureMinPerPatient,eps));
     procCap=P.Processors*(60/max(P.ProcessingSec,eps));
     reviewCap=P.Reviewers*(60/max(P.ReviewSec,eps));
     bwCap=P.UplinkMbps*60/(8*P.ImageSizeMB);

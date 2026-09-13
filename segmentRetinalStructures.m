@@ -13,7 +13,7 @@ function structures = segmentRetinalStructures(image, quality)
         % Vessel segmentation: dark-ridge response on the green channel.
         g=rgb(:,:,2);
         bg=imgaussfilt(g,max(5,round(min(h,w)/35)));
-        ridge=mat2gray(bg-g);
+        ridge=mat2gray(max(bg-g, 0));
         ridge(~fov)=0;
         threshold=graythresh(ridge(fov));
         ves=imbinarize(ridge,threshold*0.9);
@@ -39,6 +39,21 @@ function structures = segmentRetinalStructures(image, quality)
         % Fovea is deliberately labeled an approximation: temporal to disc, darker than local background.
         if any(isnan(opticDisc))
             fovea=[NaN NaN];
+            peripheralVesselDensity=NaN;
+            branchProxy=NaN;
+            suspiciousNV=false;
+            structures=struct();
+            structures.vesselMask=ves;
+            structures.vesselDensity=nnz(ves&fov)/max(nnz(fov),1);
+            structures.opticDiscCentroid=opticDisc;
+            structures.opticDiscRadius=opticDiscRadius;
+            structures.opticDiscMask=discMask;
+            structures.foveaCentroid=fovea;
+            structures.neovascularizationSuspicious=suspiciousNV;
+            structures.neovascularizationStatus="INDETERMINATE";
+            structures.neovascularizationNote="Indeterminate: optic disc/fovea localization unavailable; no dedicated NV model was supplied.";
+            structures.foveaNote="Approximate location unavailable in this image.";
+            return;
         else
             dirSign=sign((w/2)-opticDisc(1));
             if dirSign==0, dirSign=1; end
@@ -58,7 +73,8 @@ function structures = segmentRetinalStructures(image, quality)
             % Neovascularization: screening heuristic based on vessel density and fragmented/tortuous networks.
             edgeRing=imdilate(fov,strel("disk",max(2,round(min(h,w)/90)))) & ~imerode(fov,strel("disk",max(2,round(min(h,w)/18))));
             peripheralVesselDensity=nnz(ves & edgeRing)/max(nnz(edgeRing),1);
-            branchProxy=nnz(bwmorph(ves,"branchpoints"))/max(nnz(ves),1);
+            skel = bwmorph(ves, "skel", Inf);
+            branchProxy=nnz(bwmorph(skel,"branchpoints"))/max(nnz(skel),1);
             suspiciousNV=(peripheralVesselDensity>0.08 && branchProxy>0.001);
 
             structures=struct();
@@ -69,6 +85,11 @@ function structures = segmentRetinalStructures(image, quality)
             structures.opticDiscMask=discMask;
             structures.foveaCentroid=fovea;
             structures.neovascularizationSuspicious=suspiciousNV;
+            if suspiciousNV
+                structures.neovascularizationStatus="SUSPICIOUS";
+            else
+                structures.neovascularizationStatus="INDETERMINATE";
+            end
             structures.neovascularizationNote="Heuristic only; no dedicated NV model was supplied.";
             structures.foveaNote="Approximate location; validate against IDRiD fovea annotations before clinical use.";
         end

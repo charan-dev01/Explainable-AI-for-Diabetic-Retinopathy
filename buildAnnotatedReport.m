@@ -2,7 +2,7 @@ function report = buildAnnotatedReport(imageFile,original,usedImage,quality,resu
 
     % BUILDANNOTATEDREPORT
     % Creates PNG, TXT and PDF screening reports.
-    % The PDF is automatically opened after it is created.
+    % Reports are saved without opening external applications (safe for batches).
 
     %% Results directory
 
@@ -169,9 +169,15 @@ function report = buildAnnotatedReport(imageFile,original,usedImage,quality,resu
 
     fprintf(fid,'Quality message: %s\n\n',quality.message);
 
-    fprintf(fid,'DR grade: %d (%s)\n', ...
-    result.predictedGrade, ...
-    char(result.predictedClass));
+    fprintf(fid,'Classifier DR grade: %g (%s)\n', ...
+    result.predictedGrade, char(result.predictedClass));
+    if isfield(result,'finalGrade')
+        fprintf(fid,'Evidence-rule screening grade: %d (%s) | agreement: %s\n', ...
+        result.finalGrade.level,char(result.finalGrade.label),ternary(result.finalGrade.agreement,'yes','no'));
+    end
+    if isfield(result,'macularAssessment')
+        fprintf(fid,'Macular screening: %s — %s\n',result.macularAssessment.status,result.macularAssessment.message);
+    end
 
     fprintf(fid,'Classifier confidence: %.2f%%\n', ...
     100 * result.confidence);
@@ -373,17 +379,7 @@ function report = buildAnnotatedReport(imageFile,original,usedImage,quality,resu
     % OPEN PDF AUTOMATICALLY
     % =============================================================
 
-    if isfile(pdfFile)
-
-        fprintf('\nPDF report created:\n%s\n',pdfFile);
-
-        if ispc
-            winopen(pdfFile);
-        else
-            open(pdfFile);
-        end
-
-    end
+    if isfile(pdfFile), fprintf('\nPDF report created:\n%s\n',pdfFile); end
 
 end
 
